@@ -4,7 +4,11 @@ import { JSXElement } from "solid-js";
 import { hideModal, showModal } from "../../states/modals";
 import { promiseWithResolvers } from "../../utils/misc";
 import { AnimatedModal } from "../common/AnimatedModal";
-import { Captcha } from "../ui/form/Captcha";
+import {
+  Captcha,
+  CAPTCHA_DISABLED_TOKEN,
+  isCaptchaEnabled,
+} from "../ui/form/Captcha";
 
 const {
   promise: captchaPromise,
@@ -13,6 +17,7 @@ const {
 } = promiseWithResolvers<string | undefined>();
 
 export async function showRegisterCaptchaModal(): Promise<string | undefined> {
+  if (!isCaptchaEnabled()) return CAPTCHA_DISABLED_TOKEN;
   resetCaptchaPromise();
   showModal("RegisterCaptcha");
   return captchaPromise;

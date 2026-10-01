@@ -1,5 +1,5 @@
 import { AnyFieldApi } from "@tanstack/solid-form";
-import { Accessor, onMount } from "solid-js";
+import { Accessor, createEffect, onMount, Show } from "solid-js";
 import { envConfig } from "virtual:env-config";
 
 import { useRefWithUtils } from "../../../hooks/useRefWithUtils";
@@ -8,6 +8,11 @@ import { ElementWithUtils } from "../../../utils/dom";
 
 const errorText =
   "Captcha is not available. This could happen due to a blocked or failed network request. Please refresh the page or contact support if this issue persists.";
+
+/**
+ * token sent to the backend when the captcha is disabled
+ */
+export const CAPTCHA_DISABLED_TOKEN = "captcha-disabled";
 
 type Grecaptcha = {
   render: (
@@ -18,6 +23,13 @@ type Grecaptcha = {
   getResponse: (widgetId: number) => string;
 };
 
+/**
+ * captcha is disabled if the frontend is built without a recaptcha site key
+ */
+export function isCaptchaEnabled(): boolean {
+  return envConfig.recaptchaSiteKey !== "";
+}
+
 export function Captcha(props: {
   field: Accessor<AnyFieldApi>;
   class?: string;
@@ -25,29 +37,66 @@ export function Captcha(props: {
 }) {
   const [captchaRef, captchaEl] = useRefWithUtils<HTMLDivElement>();
 
+  // keep the token set when the captcha is disabled, the form might get reset
+  createEffect(() => {
+    if (isCaptchaEnabled()) return;
+    if (props.field().state.value !== CAPTCHA_DISABLED_TOKEN) {
+      props.field().setValue(CAPTCHA_DISABLED_TOKEN);
+    }
+  });
+
   onMount(() => {
+    if (!isCaptchaEnabled()) {
+      props.onSuccess?.(CAPTCHA_DISABLED_TOKEN);
+      return;
+    }
+
     const el = captchaEl() as ElementWithUtils<HTMLDivElement>;
 
-    const grecaptcha = getGrecaptcha();
-    if (grecaptcha === undefined) {
-      el.setText(errorText);
-    }
-    getGrecaptcha()?.render(el.native, {
-      sitekey: envConfig.recaptchaSiteKey,
-      callback: (token) => {
-        props.field().setValue(token);
-        props.onSuccess?.(token);
-      },
+    void loadGrecaptcha().then((grecaptcha) => {
+      if (grecaptcha === undefined) {
+        el.setText(errorText);
+        showErrorNotification(errorText);
+        return;
+      }
+      grecaptcha.render(el.native, {
+        sitekey: envConfig.recaptchaSiteKey,
+        callback: (token) => {
+          props.field().setValue(token);
+          props.onSuccess?.(token);
+        },
+      });
     });
   });
-  return <div ref={captchaRef} class={props.class}></div>;
+
+  return (
+    <Show when={isCaptchaEnabled()}>
+      <div ref={captchaRef} class={props.class}></div>
+    </Show>
+  );
 }
 
-function getGrecaptcha(): Grecaptcha | undefined {
-  if (!("grecaptcha" in window)) {
-    showErrorNotification(errorText);
-    return undefined;
-  }
+let grecaptchaPromise: Promise<Grecaptcha | undefined> | undefined;
 
-  return (window as { grecaptcha?: Grecaptcha }).grecaptcha;
+/**
+ * load the recaptcha script the first time a captcha is shown
+ */
+async function loadGrecaptcha(): Promise<Grecaptcha | undefined> {
+  grecaptchaPromise ??= new Promise((resolve) => {
+    const onLoadCallback = "onRecaptchaLoad";
+    (window as unknown as Record<string, () => void>)[onLoadCallback] = () => {
+      resolve((window as { grecaptcha?: Grecaptcha }).grecaptcha);
+    };
+
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/api.js?render=explicit&onload=${onLoadCallback}`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      grecaptchaPromise = undefined;
+      resolve(undefined);
+    };
+    document.head.appendChild(script);
+  });
+  return grecaptchaPromise;
 }

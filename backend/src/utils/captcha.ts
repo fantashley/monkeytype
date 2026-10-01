@@ -9,8 +9,12 @@ type CaptchaData = {
 
 const recaptchaSecret = process.env["RECAPTCHA_SECRET"] ?? null;
 
+export function isCaptchaDisabled(): boolean {
+  return process.env["CAPTCHA_DISABLED"] === "true";
+}
+
 export async function verify(captcha: string): Promise<boolean> {
-  if (isDevEnvironment()) {
+  if (isDevEnvironment() || isCaptchaDisabled()) {
     return true;
   }
 
