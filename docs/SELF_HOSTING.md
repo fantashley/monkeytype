@@ -38,6 +38,8 @@
 - run `docker compose up -d`
 - after the command exits successfully you can access [http://localhost](http://localhost)
 
+The frontend image is built in self hosted mode: ads, analytics, error reporting and the cookie banner are disabled, and the site doesn't check the Monkeytype status page or GitHub for new versions. When building the frontend yourself, set `SELF_HOSTED=true` to get the same behaviour.
+
 ### Hosting over the network (HTTPS)
 
 If you plan to access your self-hosted Monkeytype instance over a local network or the internet (not using `localhost`), **you must serve it over HTTPS**. Modern browsers restrict key web features, such as `crypto.randomUUID`, to secure contexts. Accessing the site via HTTP over a network will cause the frontend to crash with errors like `Uncaught TypeError: crypto.randomUUID is not a function`.

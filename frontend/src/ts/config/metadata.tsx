@@ -8,7 +8,7 @@ import { getDefaultConfig } from "../constants/default-config";
 import { isAuthenticated } from "../states/core";
 import { showNoticeNotification } from "../states/notifications";
 import { FaObject } from "../types/font-awesome";
-import { isDevEnvironment } from "../utils/env";
+import { isDevEnvironment, isSelfHosted } from "../utils/env";
 import { reloadAfter } from "../utils/misc";
 import { capitalizeFirstLetter } from "../utils/strings";
 import { getOptions } from "../utils/zod";
@@ -1302,7 +1302,7 @@ export const configMetadata: ConfigMetadataObject = {
     description: `You can disable or enable ads at any time. "Result" will show one ad on the result page, "on" will add floating vertical banners, and "sellout" will add multiple ads on every page.`,
     group: "ads",
     overrideValue: ({ value }) => {
-      if (isDevEnvironment()) {
+      if (isDevEnvironment() || isSelfHosted()) {
         return "off";
       }
       return value;
@@ -1312,10 +1312,14 @@ export const configMetadata: ConfigMetadataObject = {
         showNoticeNotification("Ads are disabled in development mode.");
         return true;
       }
+      if (value !== "off" && isSelfHosted()) {
+        showNoticeNotification("Ads are disabled on self hosted instances.");
+        return true;
+      }
       return false;
     },
     afterSet: ({ nosave }) => {
-      if (!nosave && !isDevEnvironment()) {
+      if (!nosave && !isDevEnvironment() && !isSelfHosted()) {
         reloadAfter(3);
         showNoticeNotification("Ad settings changed. Refreshing...");
       }

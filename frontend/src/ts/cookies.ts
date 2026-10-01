@@ -4,6 +4,7 @@ import { LocalStorageWithSchema } from "./utils/local-storage-with-schema";
 import { activateAnalytics } from "./controllers/analytics-controller";
 import { activateSentry } from "./sentry";
 import { isProfilerMode } from "./utils/profiler-mode";
+import { isSelfHosted } from "./utils/env";
 
 const AcceptedCookiesSchema = z
   .object({
@@ -36,6 +37,8 @@ export function setAcceptedCookies(accepted: AcceptedCookies): void {
 }
 
 export function activateWhatsAccepted(): void {
+  // self hosted instances don't report to the monkeytype analytics and sentry
+  if (isSelfHosted()) return;
   const accepted = getAcceptedCookies();
   if (accepted?.analytics) {
     activateAnalytics();

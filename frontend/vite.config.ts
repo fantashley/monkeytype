@@ -19,6 +19,7 @@ import { minifyJson } from "./vite-plugins/minify-json";
 import { versionFile } from "./vite-plugins/version-file";
 import { oxlintChecker } from "./vite-plugins/oxlint-checker";
 import { injectPreload } from "./vite-plugins/inject-preload";
+import { selfHostedHtml } from "./vite-plugins/self-hosted-html";
 import Inspect from "vite-plugin-inspect";
 import { ViteMinifyPlugin } from "vite-plugin-minify";
 import { VitePWA } from "vite-plugin-pwa";
@@ -100,6 +101,7 @@ function getPlugins({
     envConfig({ isDevelopment, clientVersion, env }),
     languageHashes({ skip: isDevelopment }),
     injectHTML() as PluginOption,
+    selfHostedHtml({ isSelfHosted: env["SELF_HOSTED"] === "true" }),
     tailwindcss(),
 
     solidPlugin(),
