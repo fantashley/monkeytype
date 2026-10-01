@@ -14,7 +14,8 @@ import queues from "./queues";
 import workers from "./workers";
 import Logger from "./utils/logger";
 import * as EmailClient from "./init/email-client";
-import { init as initFirebaseAdmin } from "./init/firebase-admin";
+import { init as initAuth } from "./utils/auth";
+import { getAuthProviderName } from "./auth-providers";
 import { createIndicies as leaderboardDbSetup } from "./dal/leaderboards";
 import { createIndicies as blocklistDbSetup } from "./dal/blocklist";
 import { createIndicies as connectionsDbSetup } from "./dal/connections";
@@ -28,8 +29,8 @@ async function bootServer(port: number): Promise<Server> {
     await db.connect();
     Logger.success("Connected to database");
 
-    Logger.info("Initializing Firebase app instance...");
-    initFirebaseAdmin();
+    Logger.info(`Initializing ${getAuthProviderName()} auth provider...`);
+    await initAuth();
 
     Logger.info("Fetching live configuration...");
     await getLiveConfiguration();
