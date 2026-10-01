@@ -17,10 +17,9 @@ import { z } from "zod";
 import { intersect } from "@monkeytype/util/arrays";
 
 const CONFIG_UPDATE_INTERVAL = 10 * 60 * 1000; // 10 Minutes
-const SERVER_CONFIG_FILE_PATH = join(
-  __dirname,
-  "../backend-configuration.json",
-);
+const SERVER_CONFIG_FILE_PATH =
+  process.env["BACKEND_CONFIGURATION_PATH"] ??
+  join(__dirname, "../backend-configuration.json");
 
 function mergeConfigurations(
   baseConfiguration: Configuration,
