@@ -231,6 +231,7 @@ Stop the running docker containers using `docker compose down` before making any
   ```
 - enable sign up in the `backend-configuration.json` file, see [Update backend configuration](#update-backend-configuration)
 - the backend has to be able to reach the identity provider to fetch its signing keys
+- the identity provider has to support the `max_age` parameter and include `auth_time` in id tokens, users have to authenticate at the identity provider again after 30 days
 - reCAPTCHA is still required for sign up, see [Setup Recaptcha](#setup-recaptcha)
 
 Because accounts are managed by the identity provider:
