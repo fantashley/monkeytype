@@ -251,5 +251,7 @@ Contains your firebase config, only needed if you want to allow users to signup.
 
 Configuration of the backend. Check the [default configuration](https://github.com/monkeytypegame/monkeytype/blob/master/backend/src/constants/base-configuration.ts#L8) for possible values.
 
+When running the backend outside of docker, the file location can be changed with the `BACKEND_CONFIGURATION_PATH` environment variable.
+
 > [!NOTE]
 > Configuration changes are applied only on container startup. You must restart the container for your updates to take effect.
