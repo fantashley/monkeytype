@@ -1,5 +1,5 @@
 import { UserCredential } from "firebase/auth";
-import type { AuthUser } from "../auth-provider";
+import type { AuthUser } from "../types/auth";
 import { createEvent } from "../hooks/createEvent";
 
 export type GoogleSignUpEventData =

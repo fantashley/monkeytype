@@ -19,9 +19,10 @@ import {
 import { createMemo } from "solid-js";
 import { z, ZodString } from "zod";
 
+import type { AuthUser } from "./types/auth";
+
 import Ape from "./ape";
 import {
-  AuthUser,
   signOut as authSignOut,
   isAuthAvailable,
   isOidcAuth,

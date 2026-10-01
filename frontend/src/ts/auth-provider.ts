@@ -3,9 +3,7 @@ import { envConfig } from "virtual:env-config";
 import * as Firebase from "./firebase";
 import * as Oidc from "./oidc";
 
-export type AuthUser = {
-  uid: string;
-};
+import type { AuthUser } from "./types/auth";
 
 type ReadyCallback = (success: boolean, user: AuthUser | null) => Promise<void>;
 
