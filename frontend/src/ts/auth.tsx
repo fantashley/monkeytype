@@ -15,28 +15,33 @@ import {
   updateEmail,
   updateProfile,
   User,
-  User as UserType,
 } from "firebase/auth";
 import { createMemo } from "solid-js";
 import { z, ZodString } from "zod";
 
 import Ape from "./ape";
+import {
+  AuthUser,
+  signOut as authSignOut,
+  isAuthAvailable,
+  isOidcAuth,
+} from "./auth-provider";
 import { waitForPresetsReady } from "./collections/presets";
 import { waitForTagsReady } from "./collections/tags";
 import { updateFromServer as updateConfigFromServer } from "./config/remote";
 import * as DB from "./db";
 import { authEvent } from "./events/auth";
+import { googleSignUpEvent } from "./events/google-sign-up";
 import {
-  signOut as authSignOut,
   createUserWithEmailAndPassword,
   getAuthenticatedUser,
-  isAuthAvailable,
   resetIgnoreAuthCallback,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "./firebase";
 import { createSignalWithSetters } from "./hooks/createSignalWithSetters";
 import { createEffectOn } from "./hooks/effects";
+import * as Oidc from "./oidc";
 import * as Sentry from "./sentry";
 import { getUserId, isAuthenticated, setUserId } from "./states/core";
 import { hideLoaderBar, showLoaderBar } from "./states/loader-bar";
@@ -98,6 +103,13 @@ type ReauthSuccess = {
   message: string;
   user: User;
 };
+
+type ReauthResult =
+  | {
+      status: "success";
+      message: string;
+    }
+  | ReauthFailed;
 
 type ReauthFailed = {
   status: "error" | "notice";
@@ -165,7 +177,9 @@ export async function sendVerificationEmail(): Promise<void> {
   }
 }
 
-async function getDataAndInit(): Promise<boolean> {
+type DataInitResult = "success" | "failed" | "signUpRequired";
+
+async function getDataAndInit(): Promise<DataInitResult> {
   try {
     console.log("getting account data");
     const snapshot = await DB.initSnapshot();
@@ -182,8 +196,16 @@ async function getDataAndInit(): Promise<boolean> {
     void Sentry.setUser(snapshot.uid, snapshot.name);
 
     await updateConfigFromServer();
-    return true;
+    return "success";
   } catch (error) {
+    if (
+      isOidcAuth() &&
+      error instanceof SnapshotInitError &&
+      error.responseCode === 404
+    ) {
+      // signed in at the identity provider for the first time
+      return "signUpRequired";
+    }
     console.error(error);
     if (error instanceof SnapshotInitError) {
       if (error.responseCode === 429) {
@@ -205,12 +227,18 @@ async function getDataAndInit(): Promise<boolean> {
     } else {
       showErrorNotification("Failed to get user data", { error });
     }
-    return false;
+    return "failed";
   }
 }
 
-export async function loadUser(_user: UserType): Promise<void> {
-  if (!(await getDataAndInit())) {
+export async function loadUser(user: AuthUser): Promise<void> {
+  const result = await getDataAndInit();
+  if (result === "signUpRequired") {
+    setUserId(null);
+    googleSignUpEvent.dispatch({ oidcUser: user });
+    return;
+  }
+  if (result === "failed") {
     signOut();
     return;
   }
@@ -219,7 +247,7 @@ export async function loadUser(_user: UserType): Promise<void> {
 
 export async function onAuthStateChanged(
   authInitialisedAndConnected: boolean,
-  user: UserType | null,
+  user: AuthUser | null,
 ): Promise<void> {
   console.debug(`account controller ready`);
 
@@ -291,6 +319,22 @@ export async function signInWithProvider(
   return { success: true };
 }
 
+/**
+ * redirects to the OIDC identity provider
+ */
+export async function signInWithOidc(): Promise<AuthResult> {
+  if (!isAuthAvailable()) {
+    return { success: false, message: "Authentication uninitialized" };
+  }
+
+  const { error } = await tryCatch(Oidc.signIn());
+
+  if (error !== null) {
+    return { success: false, message: error.message };
+  }
+  return { success: true };
+}
+
 export async function addAuthProvider(
   options:
     | { authMethod: ProviderAuthMethod }
@@ -336,7 +380,9 @@ async function addPasswordProvider(
     password: string;
   },
 ) {
-  const reauth = await reauthenticate({ password: options.password });
+  const reauth = await reauthenticateWithFirebase({
+    password: options.password,
+  });
   if (reauth.status !== "success") {
     throw new Error(reauth.message);
   }
@@ -377,7 +423,7 @@ export async function removeAuthProvider(
   authMethod: AuthMethod,
   options?: { password?: string },
 ): Promise<ReauthSuccess | ReauthFailed> {
-  const reauth = await reauthenticate({
+  const reauth = await reauthenticateWithFirebase({
     password: options?.password,
     excludeMethod: authMethod,
   });
@@ -479,6 +525,23 @@ export function getAuthProvider(
 }
 
 export async function reauthenticate(
+  options: ReauthenticateOptions,
+): Promise<ReauthResult> {
+  if (isOidcAuth()) {
+    const { error } = await tryCatch(Oidc.reauthenticate());
+    if (error !== null) {
+      return {
+        status: "error",
+        message: `Failed to reauthenticate: ${error.message}`,
+      };
+    }
+    return { status: "success", message: "Reauthenticated" };
+  }
+
+  return reauthenticateWithFirebase(options);
+}
+
+async function reauthenticateWithFirebase(
   options: ReauthenticateOptions,
 ): Promise<ReauthSuccess | ReauthFailed> {
   if (!isAuthAvailable()) {

@@ -65,6 +65,12 @@ services:
       - FIREBASE_APPID=${FIREBASE_APPID:-}
       - MONKEYTYPE_BACKENDURL=${BASE_URL:-http://localhost}/api
       - RECAPTCHA_SITE_KEY=${RECAPTCHA_SITE_KEY:-}
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-firebase}
+      - OIDC_AUTHORITY=${OIDC_AUTHORITY:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_SCOPE=${OIDC_SCOPE:-}
+      - OIDC_DISPLAY_NAME=${OIDC_DISPLAY_NAME:-}
+      - OIDC_ACCOUNT_URL=${OIDC_ACCOUNT_URL:-}
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "80"]
       interval: 5s
@@ -93,6 +99,9 @@ services:
       - EMAIL_USER=${EMAIL_USER:-}
       - EMAIL_PASS=${EMAIL_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-firebase}
+      - OIDC_ISSUER=${OIDC_AUTHORITY:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
     volumes:
       #uncomment to enable the account system, check the SELF_HOSTING.md file
       #- type: bind

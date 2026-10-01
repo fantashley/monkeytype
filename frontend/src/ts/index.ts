@@ -7,7 +7,7 @@ import "solid-devtools";
 import "./event-handlers/global";
 import "./event-handlers/test";
 
-import { init } from "./firebase";
+import { init } from "./auth-provider";
 import * as Logger from "./utils/logger";
 import * as DB from "./db";
 import "./ui";
