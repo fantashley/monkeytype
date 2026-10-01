@@ -193,6 +193,13 @@ RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
 RECAPTCHA_SECRET=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
 ```
 
+You can also disable the captcha completely, e.g. if only trusted users can access your instance or sign up is handled by your own identity provider. No requests are sent to Google in that case:
+
+```
+RECAPTCHA_SITE_KEY=
+CAPTCHA_DISABLED=true
+```
+
 ### Setup email (optional)
 
 To enable emails for password reset and email verification update the following config in `.env` file:

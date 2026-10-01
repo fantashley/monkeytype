@@ -88,6 +88,7 @@ services:
       - REDIS_URI=redis://monkeytype-redis:6379
       - FRONTEND_URL=${BASE_URL:-http://localhost}
       - RECAPTCHA_SECRET=${RECAPTCHA_SECRET:-}
+      - CAPTCHA_DISABLED=${CAPTCHA_DISABLED:-false}
       - EMAIL_HOST=${EMAIL_HOST:-}
       - EMAIL_PORT=${EMAIL_PORT:-}
       - EMAIL_USER=${EMAIL_USER:-}
