@@ -140,9 +140,13 @@ export async function getIdToken(): Promise<string | null> {
   let user = await manager.getUser();
   if (user === null) return null;
 
+  // another tab might have changed the stored account, before or during renewal
   const currentUid = getUserId();
-  if (currentUid !== null && user.profile.sub !== currentUid) {
-    await handleStoredUserChange();
+  const isOtherAccount = (u: User): boolean =>
+    currentUid !== null && u.profile.sub !== currentUid;
+
+  if (isOtherAccount(user)) {
+    window.location.reload();
     return null;
   }
 
@@ -151,6 +155,10 @@ export async function getIdToken(): Promise<string | null> {
     user = await renewToken();
     if (user === null) {
       await clearUser();
+      return null;
+    }
+    if (isOtherAccount(user)) {
+      window.location.reload();
       return null;
     }
   }

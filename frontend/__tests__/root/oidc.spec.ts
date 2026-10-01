@@ -138,6 +138,15 @@ describe("oidc", () => {
       expect(reloadMock).toHaveBeenCalled();
     });
 
+    it("does not use a token renewed for another account", async () => {
+      manager.getUser.mockResolvedValue(createUser("uid1", 10));
+      manager.signinSilent.mockResolvedValue(createUser("uid2"));
+
+      await expect(Oidc.getIdToken()).resolves.toBeNull();
+      expect(manager.signinSilent).toHaveBeenCalled();
+      expect(reloadMock).toHaveBeenCalled();
+    });
+
     it("reloads when another tab signs in with a different account", async () => {
       manager.getUser.mockResolvedValue(createUser("uid2"));
 
