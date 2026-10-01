@@ -2,6 +2,7 @@ import { createRemoteJWKSet, errors, jwtVerify, JWTVerifyGetKey } from "jose";
 import * as RedisClient from "../init/redis";
 import MonkeyError from "../utils/error";
 import Logger from "../utils/logger";
+import { tryCatch } from "@monkeytype/util/trycatch";
 import { AuthProvider } from "./types";
 
 type OidcConfig = {
@@ -28,12 +29,25 @@ function getConfig(): OidcConfig {
 }
 
 async function isRevoked(uid: string, authTime: number): Promise<boolean> {
+  // fail closed, a revoked token must not be accepted while redis is unavailable
   const connection = RedisClient.getConnection();
-  if (connection === null) {
-    Logger.warning("Redis not connected, skipping OIDC token revocation check");
-    return false;
+  if (connection === null || !RedisClient.isConnected()) {
+    throw new MonkeyError(
+      503,
+      "Unable to verify the token right now, please try again later",
+      "oidc isRevoked()",
+    );
   }
-  const revokedAt = await connection.get(getRevokedKey(uid));
+  const { data: revokedAt, error } = await tryCatch(
+    connection.get(getRevokedKey(uid)),
+  );
+  if (error) {
+    throw new MonkeyError(
+      503,
+      "Unable to verify the token right now, please try again later",
+      `oidc isRevoked(): ${error.message}`,
+    );
+  }
   if (revokedAt === null) return false;
   return authTime * 1000 <= parseInt(revokedAt, 10);
 }
@@ -95,15 +109,18 @@ export const oidcAuthProvider: AuthProvider = {
       const { payload } = await jwtVerify(idToken, jwks, {
         issuer,
         audience: clientId,
-        requiredClaims: ["sub", "iat", "exp"],
+        // auth_time stays the same when tokens are renewed, revocation relies on it
+        // so that renewing a revoked session requires signing in again.
+        // The frontend requests it by sending max_age.
+        requiredClaims: ["sub", "iat", "exp", "auth_time"],
       });
 
       const uid = payload.sub as string;
       const iat = payload.iat as number;
-      // auth_time stays the same when tokens are refreshed, so revoking it
-      // forces the user to sign in again instead of only rotating tokens
-      const authTime =
-        typeof payload["auth_time"] === "number" ? payload["auth_time"] : iat;
+      const authTime = payload["auth_time"];
+      if (typeof authTime !== "number") {
+        throw new MonkeyError(401, "Invalid token: auth_time must be a number");
+      }
 
       if (await isRevoked(uid, authTime)) {
         throw new MonkeyError(401, "Token revoked - please login again");

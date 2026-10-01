@@ -7,6 +7,13 @@ import { envConfig } from "virtual:env-config";
  */
 export const OIDC_CALLBACK_PATH = "/oidc-callback.html";
 
+/**
+ * Sent with every authentication request. Requesting max_age requires the identity
+ * provider to include auth_time in the id token, which the backend needs to revoke
+ * sessions. Users have to sign in again at the provider after this time.
+ */
+const MAX_AUTH_AGE_SECONDS = 30 * 24 * 60 * 60;
+
 export async function createUserManager(): Promise<UserManager> {
   const { UserManager, WebStorageStateStore } = await import("oidc-client-ts");
   const origin = window.location.origin;
@@ -14,6 +21,7 @@ export async function createUserManager(): Promise<UserManager> {
     authority: envConfig.oidc.authority,
     client_id: envConfig.oidc.clientId,
     scope: envConfig.oidc.scope,
+    max_age: MAX_AUTH_AGE_SECONDS,
     redirect_uri: `${origin}/login`,
     popup_redirect_uri: `${origin}${OIDC_CALLBACK_PATH}`,
     silent_redirect_uri: `${origin}${OIDC_CALLBACK_PATH}`,

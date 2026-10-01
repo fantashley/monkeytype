@@ -54,6 +54,7 @@ describe("oidc auth provider", () => {
     vi.spyOn(RedisClient, "getConnection").mockReturnValue(
       redisMock as unknown as ReturnType<typeof RedisClient.getConnection>,
     );
+    vi.spyOn(RedisClient, "isConnected").mockReturnValue(true);
 
     await oidcAuthProvider.init();
   });
@@ -72,7 +73,11 @@ describe("oidc auth provider", () => {
     claims: Record<string, unknown> = {},
     options: { audience?: string; issuer?: string; expiresIn?: string } = {},
   ): Promise<string> {
-    return await new SignJWT({ email: "user@example.com", ...claims })
+    return await new SignJWT({
+      email: "user@example.com",
+      auth_time: Math.floor(Date.now() / 1000),
+      ...claims,
+    })
       .setProtectedHeader({ alg: "RS256", kid: "key1" })
       .setSubject("user-uid")
       .setIssuer(options.issuer ?? issuer)
@@ -133,6 +138,36 @@ describe("oidc auth provider", () => {
       );
       expect(redisMock.get).toHaveBeenCalledWith(
         "auth:tokens-revoked-at:user-uid",
+      );
+    });
+
+    it("rejects a token without auth_time", async () => {
+      const token = await createToken({ auth_time: undefined });
+
+      await expect(oidcAuthProvider.verifyIdToken(token)).rejects.toThrow(
+        'missing required "auth_time" claim',
+      );
+    });
+
+    it("fails closed when redis is unavailable", async () => {
+      const token = await createToken();
+      vi.mocked(RedisClient.isConnected).mockReturnValueOnce(false);
+
+      await expect(oidcAuthProvider.verifyIdToken(token)).rejects.toMatchObject(
+        {
+          status: 503,
+        },
+      );
+    });
+
+    it("fails closed when the revocation lookup fails", async () => {
+      const token = await createToken();
+      redisMock.get.mockRejectedValue(new Error("connection lost"));
+
+      await expect(oidcAuthProvider.verifyIdToken(token)).rejects.toMatchObject(
+        {
+          status: 503,
+        },
       );
     });
 
