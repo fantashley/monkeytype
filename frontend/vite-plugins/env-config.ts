@@ -22,6 +22,17 @@ export function envConfig(options: {
     },
     load(id) {
       if (id === resolvedVirtualModuleId) {
+        const authConfig: Pick<EnvConfig, "authProvider" | "oidc"> = {
+          authProvider: fallback(options.env["AUTH_PROVIDER"], "firebase"),
+          oidc: {
+            authority: options.env["OIDC_AUTHORITY"] ?? "",
+            clientId: options.env["OIDC_CLIENT_ID"] ?? "",
+            scope: fallback(options.env["OIDC_SCOPE"], "openid profile email"),
+            displayName: fallback(options.env["OIDC_DISPLAY_NAME"], "OIDC"),
+            accountUrl: options.env["OIDC_ACCOUNT_URL"] ?? "",
+          },
+        };
+
         const devConfig: EnvConfig = {
           isDevelopment: true,
           backendUrl: fallback(
@@ -32,6 +43,7 @@ export function envConfig(options: {
           recaptchaSiteKey: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
           quickLoginEmail: options.env["QUICK_LOGIN_EMAIL"],
           quickLoginPassword: options.env["QUICK_LOGIN_PASSWORD"],
+          ...authConfig,
         };
 
         const prodConfig: EnvConfig = {
@@ -44,6 +56,7 @@ export function envConfig(options: {
           quickLoginEmail: undefined,
           quickLoginPassword: undefined,
           clientVersion: options.clientVersion,
+          ...authConfig,
         };
 
         const envConfig = options.isDevelopment ? devConfig : prodConfig;
