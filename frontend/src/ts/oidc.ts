@@ -1,7 +1,7 @@
 import type { User, UserManager } from "oidc-client-ts";
 import { envConfig } from "virtual:env-config";
 
-import { setUserId, setUserVerified } from "./states/core";
+import { getUserId, setUserId, setUserVerified } from "./states/core";
 import { promiseWithResolvers } from "./utils/misc";
 import type { AuthUser } from "./types/auth";
 import { createUserManager } from "./oidc-user-manager";
@@ -32,6 +32,18 @@ function toAuthUser(user: User | null): AuthUser | null {
   return { uid: user.profile.sub };
 }
 
+/**
+ * The user is stored in localStorage, which is shared between tabs. Reload if
+ * another tab signed in with a different account or signed out, so this tab
+ * doesn't send requests for one account while showing the data of another.
+ */
+async function handleStoredUserChange(): Promise<void> {
+  if (manager === undefined) return;
+  const storedUid = toAuthUser(await manager.getUser())?.uid ?? null;
+  if (storedUid === getUserId()) return;
+  window.location.reload();
+}
+
 function setUserState(user: AuthUser | null): void {
   setUserId(user?.uid ?? null);
   // email verification is handled by the identity provider
@@ -57,6 +69,12 @@ export async function init(callback: ReadyCallback): Promise<void> {
 
     manager.events.addUserSignedOut(async () => {
       await clearUser();
+    });
+
+    window.addEventListener("storage", (event) => {
+      if (event.key?.startsWith("oidc.user:") === true) {
+        void handleStoredUserChange();
+      }
     });
 
     let user = await manager.getUser();
@@ -121,6 +139,12 @@ export async function getIdToken(): Promise<string | null> {
   if (manager === undefined) return null;
   let user = await manager.getUser();
   if (user === null) return null;
+
+  const currentUid = getUserId();
+  if (currentUid !== null && user.profile.sub !== currentUid) {
+    await handleStoredUserChange();
+    return null;
+  }
 
   const expiresAt = user.profile.exp;
   if (expiresAt - TOKEN_EXPIRY_BUFFER_SECONDS < Date.now() / 1000) {

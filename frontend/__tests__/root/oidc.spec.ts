@@ -123,6 +123,59 @@ describe("oidc", () => {
     });
   });
 
+  describe("account changes in other tabs", () => {
+    const reloadMock = vi.fn();
+
+    beforeEach(() => {
+      reloadMock.mockReset();
+      vi.spyOn(window.location, "reload").mockImplementation(reloadMock);
+    });
+
+    it("does not use the token of another account", async () => {
+      manager.getUser.mockResolvedValue(createUser("uid2"));
+
+      await expect(Oidc.getIdToken()).resolves.toBeNull();
+      expect(reloadMock).toHaveBeenCalled();
+    });
+
+    it("reloads when another tab signs in with a different account", async () => {
+      manager.getUser.mockResolvedValue(createUser("uid2"));
+
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "oidc.user:https://id.example.com:client",
+        }),
+      );
+
+      await vi.waitFor(() => expect(reloadMock).toHaveBeenCalled());
+    });
+
+    it("reloads when another tab signs out", async () => {
+      manager.getUser.mockResolvedValue(null);
+
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "oidc.user:https://id.example.com:client",
+        }),
+      );
+
+      await vi.waitFor(() => expect(reloadMock).toHaveBeenCalled());
+    });
+
+    it("ignores token renewals of the same account", async () => {
+      manager.getUser.mockResolvedValue(createUser("uid1"));
+
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "oidc.user:https://id.example.com:client",
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(reloadMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("reauthenticate", () => {
     it("forces a new sign in", async () => {
       manager.signinPopup.mockResolvedValue(createUser("uid1"));
