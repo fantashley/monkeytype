@@ -15,13 +15,21 @@ sed -i "s/###MONKEYTYPE_BACKENDURL###/${MONKEYTYPE_BACKENDURL//\//\\/}/g" js/*.j
 echo "use recaptcha ${RECAPTCHA_SITE_KEY}"
 sed -i "s/###RECAPTCHA_SITE_KEY###/${RECAPTCHA_SITE_KEY//\//\\/}/g" js/*.js
 
+# Replace a placeholder inside a JavaScript string literal with a value.
+# The value is escaped for the JavaScript string (\ " ' ` $) and then for the
+# sed replacement (\ & and the | delimiter).
+replace_string() {
+  escaped=$(printf '%s' "$2" |
+    sed -e 's/[\\"'"'"'`$]/\\&/g' |
+    sed -e 's/[\\&|]/\\&/g')
+  sed -i "s|###$1###|${escaped}|g" js/*.js
+}
+
 AUTH_PROVIDER="${AUTH_PROVIDER:-firebase}"
 echo "use auth provider ${AUTH_PROVIDER}"
-sed -i "s/###AUTH_PROVIDER###/${AUTH_PROVIDER}/g" js/*.js
-sed -i "s/###OIDC_AUTHORITY###/${OIDC_AUTHORITY//\//\\/}/g" js/*.js
-sed -i "s/###OIDC_CLIENT_ID###/${OIDC_CLIENT_ID//\//\\/}/g" js/*.js
-OIDC_SCOPE="${OIDC_SCOPE:-openid profile email}"
-sed -i "s/###OIDC_SCOPE###/${OIDC_SCOPE//\//\\/}/g" js/*.js
-OIDC_DISPLAY_NAME="${OIDC_DISPLAY_NAME:-OIDC}"
-sed -i "s/###OIDC_DISPLAY_NAME###/${OIDC_DISPLAY_NAME//\//\\/}/g" js/*.js
-sed -i "s/###OIDC_ACCOUNT_URL###/${OIDC_ACCOUNT_URL//\//\\/}/g" js/*.js
+replace_string AUTH_PROVIDER "${AUTH_PROVIDER}"
+replace_string OIDC_AUTHORITY "${OIDC_AUTHORITY}"
+replace_string OIDC_CLIENT_ID "${OIDC_CLIENT_ID}"
+replace_string OIDC_SCOPE "${OIDC_SCOPE:-openid profile email}"
+replace_string OIDC_DISPLAY_NAME "${OIDC_DISPLAY_NAME:-OIDC}"
+replace_string OIDC_ACCOUNT_URL "${OIDC_ACCOUNT_URL}"
