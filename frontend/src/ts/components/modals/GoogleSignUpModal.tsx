@@ -7,9 +7,11 @@ import {
   UserCredential,
 } from "firebase/auth";
 
+import type { AuthUser } from "../../types/auth";
+
 import Ape from "../../ape";
 import { loadUser, signOut } from "../../auth";
-import { AuthUser, signOut as authSignOut } from "../../auth-provider";
+import { signOut as authSignOut } from "../../auth-provider";
 import { authEvent } from "../../events/auth";
 import { googleSignUpEvent } from "../../events/google-sign-up";
 import { resetIgnoreAuthCallback, setUserState } from "../../firebase";

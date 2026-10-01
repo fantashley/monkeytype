@@ -3,7 +3,7 @@ import { envConfig } from "virtual:env-config";
 
 import { setUserId, setUserVerified } from "./states/core";
 import { promiseWithResolvers } from "./utils/misc";
-import type { AuthUser } from "./auth-provider";
+import type { AuthUser } from "./types/auth";
 import { createUserManager } from "./oidc-user-manager";
 
 type ReadyCallback = (success: boolean, user: AuthUser | null) => Promise<void>;
