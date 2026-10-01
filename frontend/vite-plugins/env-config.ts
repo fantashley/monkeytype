@@ -44,6 +44,7 @@ export function envConfig(options: {
           quickLoginEmail: options.env["QUICK_LOGIN_EMAIL"],
           quickLoginPassword: options.env["QUICK_LOGIN_PASSWORD"],
           ...authConfig,
+          isSelfHosted: options.env["SELF_HOSTED"] === "true",
         };
 
         const prodConfig: EnvConfig = {
@@ -55,6 +56,7 @@ export function envConfig(options: {
           recaptchaSiteKey: options.env["RECAPTCHA_SITE_KEY"] ?? "",
           quickLoginEmail: undefined,
           quickLoginPassword: undefined,
+          isSelfHosted: options.env["SELF_HOSTED"] === "true",
           clientVersion: options.clientVersion,
           ...authConfig,
         };

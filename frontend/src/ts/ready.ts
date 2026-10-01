@@ -6,7 +6,7 @@ import { configLoadPromise } from "./config/lifecycle";
 import { authPromise } from "./auth-provider";
 import { animate } from "animejs";
 import { onDOMReady, qs } from "./utils/dom";
-import { isDevEnvironment } from "./utils/env";
+import { isDevEnvironment, isSelfHosted } from "./utils/env";
 
 onDOMReady(async () => {
   await configLoadPromise;
@@ -17,7 +17,7 @@ onDOMReady(async () => {
   qs("body")?.setStyle({
     transition: "background .25s, transform .05s",
   });
-  MerchBanner.showIfNotClosedBefore();
+  if (!isSelfHosted()) MerchBanner.showIfNotClosedBefore();
 
   const app = document.querySelector("#app") as HTMLElement;
   app?.classList.remove("hidden");
