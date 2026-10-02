@@ -22,7 +22,12 @@
           };
         in
         {
-          inherit (monkeytype) backend frontend pnpmDeps;
+          inherit (monkeytype)
+            backend
+            frontend
+            pnpmDeps
+            workspace
+            ;
           default = monkeytype.backend;
         }
       );
