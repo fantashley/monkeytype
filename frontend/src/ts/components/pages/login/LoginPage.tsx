@@ -10,7 +10,7 @@ import { Register } from "./Register";
 export function LoginPage(): JSXElement {
   const serverConfig = useQuery(() => getServerConfigurationQueryOptions());
   const isSignUpDisabled = (): boolean =>
-    !(serverConfig.data?.users.signUp ?? true);
+    serverConfig.isError || !(serverConfig.data?.users.signUp ?? true);
 
   return (
     <Page id="login">

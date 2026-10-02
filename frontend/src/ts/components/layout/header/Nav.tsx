@@ -22,6 +22,7 @@ import {
   getAnimatedLevel,
   setAnimatedLevel,
 } from "../../../states/header";
+import { getLastKnownLoginRequired } from "../../../states/login-required";
 import { showModal } from "../../../states/modals";
 import { getSnapshot } from "../../../states/snapshot";
 import { getFocus } from "../../../states/test";
@@ -78,9 +79,14 @@ export function Nav(): JSXElement {
   const serverConfig = useQuery(() => getServerConfigurationQueryOptions());
   const showLoginButton = (): boolean =>
     serverConfig.data?.users.signUp ?? true;
-  // signed out users can only go to the login page when login is required
+  // signed out users can only go to the login page when login is required,
+  // which is assumed when the configuration can't be loaded, like the router does
+  const isLoginRequired = (): boolean =>
+    serverConfig.data?.users.loginRequired ??
+    getLastKnownLoginRequired() ??
+    serverConfig.isError;
   const showPageButtons = (): boolean =>
-    isAuthenticated() || !(serverConfig.data?.users.loginRequired ?? false);
+    isAuthenticated() || !isLoginRequired();
 
   return (
     <nav class={cn("z-5 flex w-full items-center gap-1 md:gap-2")}>

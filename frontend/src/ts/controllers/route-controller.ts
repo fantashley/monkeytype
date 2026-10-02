@@ -9,8 +9,10 @@ import { authEvent } from "../events/auth";
 import { queryClient } from "../queries";
 import { getServerConfigurationQueryOptions } from "../queries/server-configuration";
 import { tryCatch } from "@monkeytype/util/trycatch";
-import { z } from "zod";
-import { LocalStorageWithSchema } from "../utils/local-storage-with-schema";
+import {
+  getLastKnownLoginRequired,
+  setLastKnownLoginRequired,
+} from "../states/login-required";
 import {
   isTestRestarting,
   isResultCalculating,
@@ -45,27 +47,26 @@ type Route = {
   ) => Promise<void>;
 };
 
-// last known setting of the server, used when the configuration can't be fetched
-const loginRequiredLS = new LocalStorageWithSchema({
-  key: "loginRequired",
-  schema: z.boolean(),
-  fallback: false,
-});
-
 /**
  * true if the server only lets signed in users use the site.
- * If the configuration can't be fetched, the last known setting is used. The
- * server enforces this for its data, the typing test itself can't be protected
- * from someone who never loaded the configuration or changes the client.
+ * If the configuration can't be loaded, the last known setting is used. Until
+ * the setting is known, signed out users stay on the login page, which shows
+ * that the server is unavailable.
  */
 async function isLoginRequired(): Promise<boolean> {
-  const { data } = await tryCatch(
-    queryClient.fetchQuery(getServerConfigurationQueryOptions()),
-  );
-  if (data === null) return loginRequiredLS.get();
+  const options = getServerConfigurationQueryOptions();
+  const state = queryClient.getQueryState(options.queryKey);
+  let configuration = state?.data;
+  // the configuration is loaded once, don't wait for a failed request again on
+  // every page change
+  if (configuration === undefined && state?.status !== "error") {
+    const { data } = await tryCatch(queryClient.fetchQuery(options));
+    configuration = data ?? undefined;
+  }
+  if (configuration === undefined) return getLastKnownLoginRequired() ?? true;
 
-  loginRequiredLS.set(data.users.loginRequired);
-  return data.users.loginRequired;
+  setLastKnownLoginRequired(configuration.users.loginRequired);
+  return configuration.users.loginRequired;
 }
 
 /**

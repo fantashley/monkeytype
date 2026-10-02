@@ -16,12 +16,29 @@ vi.mock("../../src/ts/firebase", () => ({
   authPromise: Promise.resolve(),
   isAuthAvailable: vi.fn(),
 }));
+// read local storage on every access, so every test starts like a fresh browser
+vi.mock("../../src/ts/utils/local-storage-with-schema", () => ({
+  LocalStorageWithSchema: class<T> {
+    private options: { key: string; fallback: T };
+    constructor(options: { key: string; fallback: T }) {
+      this.options = options;
+    }
+    get(): T {
+      const value = localStorage.getItem(this.options.key);
+      return value === null ? this.options.fallback : (JSON.parse(value) as T);
+    }
+    set(value: T): void {
+      localStorage.setItem(this.options.key, JSON.stringify(value));
+    }
+  },
+}));
 
 describe("route-controller", () => {
   const changePageMock = vi.mocked(PageController.change);
   const isAuthAvailableMock = vi.mocked(Firebase.isAuthAvailable);
   const isAuthenticatedMock = vi.spyOn(CoreSignals, "isAuthenticated");
   const fetchQueryMock = vi.spyOn(queryClient, "fetchQuery");
+  const getQueryStateMock = vi.spyOn(queryClient, "getQueryState");
   const isTestActiveMock = vi.spyOn(TestState, "isTestActive");
   const isFunboxActiveMock = vi.spyOn(Funbox, "isFunboxActive");
   const notifyMock = vi.spyOn(Notifications, "showNoticeNotification");
@@ -34,10 +51,12 @@ describe("route-controller", () => {
 
   beforeEach(() => {
     history.replaceState(null, "", "/");
+    localStorage.clear();
     changePageMock.mockClear();
     isAuthAvailableMock.mockReset().mockReturnValue(true);
     isAuthenticatedMock.mockClear().mockReturnValue(false);
     fetchQueryMock.mockReset();
+    getQueryStateMock.mockReset();
     mockLoginRequired(false);
     isTestActiveMock.mockReset().mockReturnValue(false);
     isFunboxActiveMock.mockReset().mockReturnValue(false);
@@ -96,6 +115,37 @@ describe("route-controller", () => {
       changePageMock.mockClear();
       fetchQueryMock.mockRejectedValue(new Error("server down"));
     }
+
+    it("sends signed out users to the login page until the setting is known", async () => {
+      fetchQueryMock.mockRejectedValue(new Error("server down"));
+
+      await navigate("/", { force: true });
+
+      expect(location.pathname).toEqual("/login");
+      expect(changePageMock).toHaveBeenCalledOnce();
+      expect(changePageMock).toHaveBeenCalledWith("login", { force: true });
+    });
+
+    it("shows pages to signed in users", async () => {
+      fetchQueryMock.mockRejectedValue(new Error("server down"));
+      isAuthenticatedMock.mockReturnValue(true);
+
+      await navigate("/", { force: true });
+
+      expect(changePageMock).toHaveBeenCalledWith("test", { force: true });
+    });
+
+    it("doesn't wait for a failed request again", async () => {
+      getQueryStateMock.mockReturnValue({
+        status: "error",
+        data: undefined,
+      } as ReturnType<typeof queryClient.getQueryState>);
+
+      await navigate("/", { force: true });
+
+      expect(fetchQueryMock).not.toHaveBeenCalled();
+      expect(location.pathname).toEqual("/login");
+    });
 
     it("keeps login required if it was required before", async () => {
       await loadConfigurationThenFail(true);
