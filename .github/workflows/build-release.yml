@@ -52,9 +52,6 @@ permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  group: build-release
-
 env:
   UPSTREAM: monkeytypegame/monkeytype
   RELEASE_LABEL: release
@@ -67,6 +64,10 @@ jobs:
       github.event_name != 'pull_request_target' ||
       github.event.label.name == 'release' ||
       contains(github.event.pull_request.labels.*.name, 'release')
+    # on the job, so skipped runs don't replace a waiting build. Every build
+    # reads the labels when it starts, so the latest waiting one is enough
+    concurrency:
+      group: build-release
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
