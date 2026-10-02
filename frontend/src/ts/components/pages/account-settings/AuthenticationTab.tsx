@@ -1,4 +1,5 @@
 import { createSignal, Show } from "solid-js";
+import { envConfig } from "virtual:env-config";
 
 import {
   addAuthProvider,
@@ -10,6 +11,7 @@ import {
   isUsingAuthenticationReactive,
   ProviderAuthMethod,
 } from "../../../auth";
+import { isOidcAuth } from "../../../auth-provider";
 import { Button } from "../../common/Button";
 import { showAddPasswordAuthModal } from "../../modals/account-settings/AddPasswordAuthModal";
 import { showRevokeAllTokensModal } from "../../modals/account-settings/ReauthConfirmModals";
@@ -21,11 +23,42 @@ import { Section } from "./utils";
 export function AuthenticationTab() {
   return (
     <>
-      <PasswordAuthentication />
-      <ProviderAuthentication authMethod="google" />
-      <ProviderAuthentication authMethod="github" />
+      <Show
+        when={isOidcAuth()}
+        fallback={
+          <>
+            <PasswordAuthentication />
+            <ProviderAuthentication authMethod="google" />
+            <ProviderAuthentication authMethod="github" />
+          </>
+        }
+      >
+        <OidcAuthentication />
+      </Show>
       <RevokeAllTokens />
     </>
+  );
+}
+
+function OidcAuthentication() {
+  return (
+    <Section
+      title={`${envConfig.oidc.displayName} authentication`}
+      fa={{ icon: "fa-id-card" }}
+      description=<>
+        Your sign in methods and email are managed by
+        {` ${envConfig.oidc.displayName}`}.
+      </>
+    >
+      <Show when={envConfig.oidc.accountUrl !== ""}>
+        <Button
+          class="w-full"
+          text="manage account"
+          fa={{ icon: "fa-external-link-alt" }}
+          href={envConfig.oidc.accountUrl}
+        />
+      </Show>
+    </Section>
   );
 }
 

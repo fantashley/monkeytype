@@ -17,6 +17,7 @@
     - [Update backend configuration](#update-backend-configuration)
     - [Setup Recaptcha](#setup-recaptcha)
     - [Setup email optional](#setup-email-optional)
+  - [Account System with OpenID Connect](#account-system-with-openid-connect)
   - [Enable daily leaderboards](#enable-daily-leaderboards)
   - [Configuration files](#configuration-files)
     - [env file](#env-file)
@@ -101,6 +102,7 @@ Sources:
 ## Account System
 
 By default, user sign-up and login are disabled. To enable this, you'll need to set up a Firebase project.
+If you don't want to depend on Firebase, you can use your own identity provider instead, see [Account System with OpenID Connect](#account-system-with-openid-connect).
 Stop the running docker containers using `docker compose down` before making any changes.
 
 ### Setup Firebase
@@ -206,6 +208,36 @@ EMAIL_PASS=mailpass        # password for the user
 EMAIL_PORT=465             # port, likely 465 or 587
 EMAIL_FROM="Support <noreply@myserver>"
 ```
+
+## Account System with OpenID Connect
+
+Instead of Firebase, user accounts can be managed by a self-hosted identity provider that supports OpenID Connect, like [Pocket ID](https://pocket-id.org), [Authelia](https://www.authelia.com) or [Keycloak](https://www.keycloak.org).
+Users sign in at the identity provider and pick a Monkeytype username the first time they sign in. Passwords, email addresses and other sign in methods are managed by the identity provider, so the related Monkeytype settings are hidden.
+
+Stop the running docker containers using `docker compose down` before making any changes.
+
+- create a client in your identity provider
+  - client type: public (no client secret, the authorization code flow with PKCE is used)
+  - callback urls: `https://mydomain.com/login` and `https://mydomain.com/oidc-callback.html`
+  - logout callback url: `https://mydomain.com`
+  - allowed scopes: `openid`, `profile` and `email`
+- update the `.env` file
+  ```
+  AUTH_PROVIDER=oidc
+  OIDC_AUTHORITY=https://id.mydomain.com   # the issuer url of your identity provider
+  OIDC_CLIENT_ID=your-client-id
+  OIDC_DISPLAY_NAME="My ID"                # shown on the login page
+  OIDC_ACCOUNT_URL=https://id.mydomain.com # optional, where users manage their account
+  ```
+- enable sign up in the `backend-configuration.json` file, see [Update backend configuration](#update-backend-configuration)
+- the backend has to be able to reach the identity provider to fetch its signing keys
+- the identity provider has to support the `max_age` parameter and include `auth_time` in id tokens, users have to authenticate at the identity provider again after 30 days
+- reCAPTCHA is still required for sign up, see [Setup Recaptcha](#setup-recaptcha)
+
+Because accounts are managed by the identity provider:
+
+- deleting a Monkeytype account does not delete the account at the identity provider
+- "revoke all tokens" signs the user out of Monkeytype on all devices, they have to authenticate at the identity provider again to sign back in
 
 ## Enable daily leaderboards
 

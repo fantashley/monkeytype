@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import Ape from "../../../ape";
 import {
+  getAuthenticatedUser,
   getPasswordSchema,
   isUsingPasswordAuthentication,
   reauthenticate,
@@ -61,7 +62,7 @@ export function showUpdateEmailModal(): void {
       const response = await Ape.users.updateEmail({
         body: {
           newEmail: email,
-          previousEmail: reauth.user.email as string,
+          previousEmail: getAuthenticatedUser()?.email as string,
         },
       });
 

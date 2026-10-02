@@ -7,11 +7,15 @@ import {
   UserCredential,
 } from "firebase/auth";
 
+import type { AuthUser } from "../../types/auth";
+
 import Ape from "../../ape";
 import { loadUser, signOut } from "../../auth";
+import { signOut as authSignOut } from "../../auth-provider";
 import { authEvent } from "../../events/auth";
 import { googleSignUpEvent } from "../../events/google-sign-up";
 import { resetIgnoreAuthCallback, setUserState } from "../../firebase";
+import { setUserId } from "../../states/core";
 import { hideLoaderBar, showLoaderBar } from "../../states/loader-bar";
 import { hideModal, ModalId, showModal } from "../../states/modals";
 import {
@@ -28,6 +32,8 @@ import { allFieldsMandatory, fromSchema } from "../ui/form/utils";
 
 const modalId: ModalId = "GoogleSignup";
 let signedInUser: UserCredential | undefined = undefined;
+// user signed in at an OIDC provider who does not have an account yet
+let oidcUser: AuthUser | undefined = undefined;
 
 export function GoogleSignupModal() {
   const form = createForm(() => ({
@@ -93,6 +99,13 @@ export function GoogleSignupModal() {
 
 async function afterHide(): Promise<void> {
   resetIgnoreAuthCallback();
+  if (oidcUser !== undefined) {
+    showNoticeNotification("Sign up process cancelled", {
+      durationMs: 5000,
+    });
+    oidcUser = undefined;
+    await authSignOut();
+  }
   if (signedInUser !== undefined) {
     showNoticeNotification("Sign up process cancelled", {
       durationMs: 5000,
@@ -112,6 +125,10 @@ async function apply(options: {
   captcha: string;
 }): Promise<void> {
   const { username: name, captcha } = options;
+  if (oidcUser !== undefined) {
+    await applyOidc(oidcUser, name, captcha);
+    return;
+  }
   if (!signedInUser) {
     showErrorNotification(
       "Missing user credential. Please close the popup and try again.",
@@ -159,8 +176,46 @@ async function apply(options: {
   }
 }
 
+async function applyOidc(
+  user: AuthUser,
+  name: string,
+  captcha: string,
+): Promise<void> {
+  if (!captcha) {
+    showNoticeNotification("Please complete the captcha");
+    return;
+  }
+
+  showLoaderBar();
+  try {
+    const response = await Ape.users.create({ body: { name, captcha } });
+    if (response.status !== 200) {
+      throw new Error(`Failed to create user: ${response.body.message}`);
+    }
+
+    oidcUser = undefined;
+    setUserId(user.uid);
+    showSuccessNotification("Account created");
+    await loadUser(user);
+
+    authEvent.dispatch({
+      type: "authStateChanged",
+      data: { isUserSignedIn: true, loadPromise: Promise.resolve() },
+    });
+  } catch (e) {
+    console.log(e);
+    showErrorNotification("Failed to create account", { error: e });
+  } finally {
+    hideLoaderBar();
+    hideModal(modalId);
+  }
+}
+
 googleSignUpEvent.subscribe((data) => {
-  if (data.signedInUser !== undefined && data.isNewUser) {
+  if ("oidcUser" in data) {
+    oidcUser = data.oidcUser;
+    showModal(modalId);
+  } else if (data.signedInUser !== undefined && data.isNewUser) {
     signedInUser = data.signedInUser;
     showModal(modalId);
   }
