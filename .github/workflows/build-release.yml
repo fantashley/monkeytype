@@ -1,0 +1,216 @@
+# Fork only: builds the deployable release branch.
+#
+# Branches:
+#   master   the latest upstream release, never changed by hand
+#   <topic>  one branch per change with a PR against master, so it can be
+#            reviewed and contributed upstream on its own
+#   fork     fork only changes (nix flake and module, this workflow), changed
+#            through PRs against fork
+#   release  generated: master + the branches of the open PRs labelled
+#            "release", merged in PR number order + fork. Don't commit to it,
+#            except to record a conflict resolution, see
+#            .github/scripts/build-release.sh
+#
+# Runs daily to pick up upstream releases, when the fork branch or a labelled PR
+# changes, when a PR is labelled or unlabelled, and by hand. It:
+#   1. finds the latest upstream release, when master doesn't have it yet the
+#      labelled branches and fork are rebased onto it,
+#   2. rebuilds release with .github/scripts/build-release.sh,
+#   3. refreshes the pnpm dependency hash in nix/package.nix,
+#   4. runs lint, unit tests and the nix builds on release,
+#   5. force pushes master, the rebased branches and release.
+# On a conflict or a failed check nothing is pushed and the run fails.
+#
+# dotfiles picks up the release branch in its daily flake update.
+#
+# Pushes use the SYNC_DEPLOY_KEY deploy key (write access): the GITHUB_TOKEN
+# can't push commits that change workflow files, which upstream releases do.
+# The key is only loaded for the push, after the tests ran.
+name: Build release
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  push:
+    branches: [fork]
+  # pull_request_target runs this workflow from the default branch. Only PRs
+  # from branches of this repository are built, which only people with write
+  # access can push to and label.
+  pull_request_target:
+    types: [labeled, unlabeled, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Upstream ref to build on instead of the latest release (e.g. a tag or master)
+        required: false
+      dry_run:
+        description: Build and run the checks, but don't push
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: build-release
+
+env:
+  UPSTREAM: monkeytypegame/monkeytype
+  RELEASE_LABEL: release
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build:
+    # PR events only matter for PRs that ship or stop shipping
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      github.event.label.name == 'release' ||
+      contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fork
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find the upstream release
+        id: target
+        run: |
+          ref="${{ inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          fi
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --no-tags upstream "$ref"
+          commit=$(git rev-parse "FETCH_HEAD^{commit}")
+          if git merge-base --is-ancestor "$commit" origin/master; then
+            echo "Upstream $ref is already in master" | tee -a "$GITHUB_STEP_SUMMARY"
+            commit=$(git rev-parse origin/master)
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Updating master to upstream $ref ($commit)" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Build the release branch
+        id: build
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --label "$RELEASE_LABEL" \
+            --limit 100 --json number,title,headRefName,baseRefName,isCrossRepository)
+          jq -r '.[] | select(.baseRefName != "master" or .isCrossRepository) |
+            "::warning::Skipping #\(.number), only PRs from this repository against master are released"' <<< "$prs"
+          read -ra branches <<< "$(jq -r '[.[] | select(.baseRefName == "master" and (.isCrossRepository | not))]
+            | sort_by(.number) | map(.headRefName) | join(" ")' <<< "$prs")"
+          jq -r '[.[] | select(.baseRefName == "master" and (.isCrossRepository | not))] | sort_by(.number)
+            | .[] | "- #\(.number) \(.title) (`\(.headRefName)`)"' <<< "$prs" > released.md
+
+          # actions/checkout leaves fork checked out, which can't be force updated
+          git checkout --quiet --detach
+          for branch in "${branches[@]}" fork; do
+            git branch -f "$branch" "origin/$branch"
+          done
+          echo "branches=${branches[*]}" >> "$GITHUB_OUTPUT"
+
+          # the script checks out other branches, run a copy of it
+          cp .github/scripts/build-release.sh "$RUNNER_TEMP/"
+          "$RUNNER_TEMP/build-release.sh" "${{ steps.target.outputs.commit }}" origin/release \
+            "${branches[@]}" fork
+
+          {
+            echo "### Release"
+            echo "master ($(git log -1 --format=%h "${{ steps.target.outputs.commit }}")) +"
+            cat released.md
+            echo "+ fork"
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm released.md
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Update the pnpm dependency hash
+        run: |
+          if nix build .#pnpmDeps --no-link 2> build.log; then
+            echo "pnpm dependency hash is up to date"
+            exit 0
+          fi
+          hash=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | awk '{print $2}')
+          if [ -z "$hash" ]; then
+            cat build.log
+            echo "::error::Building the pnpm dependencies failed"
+            exit 1
+          fi
+          sed -i -E "s|hash = \"sha256-[A-Za-z0-9+/=]+\";|hash = \"$hash\";|" nix/package.nix
+          nix build .#pnpmDeps --no-link
+          git commit -am "build(nix): update pnpm dependency hash"
+          echo "Updated the pnpm dependency hash" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ "${{ steps.target.outputs.updated }}" = false ] &&
+            git diff --quiet origin/release release; then
+            echo "The release didn't change" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.changes.outputs.changed == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Lint and test
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "./packages/*" --recursive run build
+          cp frontend/src/ts/constants/firebase-config-example.ts frontend/src/ts/constants/firebase-config.ts
+          pnpm --filter @monkeytype/backend run lint
+          pnpm --filter @monkeytype/backend run test
+          pnpm --filter @monkeytype/frontend run lint
+          pnpm --filter @monkeytype/frontend run madge
+          pnpm --filter @monkeytype/frontend run test
+          rm frontend/src/ts/constants/firebase-config.ts
+
+      - name: Build the nix packages
+        if: steps.changes.outputs.changed == 'true'
+        run: nix build .#backend .#frontend -L
+
+      - name: Push
+        if: steps.changes.outputs.changed == 'true' && !inputs.dry_run
+        env:
+          SYNC_DEPLOY_KEY: ${{ secrets.SYNC_DEPLOY_KEY }}
+        run: |
+          args=()
+          # push <commit> to <branch>, unless the branch changed since the checkout
+          lease() {
+            args+=("--force-with-lease=$1:$(git rev-parse "origin/$1")" "$2:refs/heads/$1")
+          }
+          lease release release
+          if [ "${{ steps.target.outputs.updated }}" = true ]; then
+            lease master "${{ steps.target.outputs.commit }}"
+            read -ra branches <<< "${{ steps.build.outputs.branches }}"
+            for branch in "${branches[@]}" fork; do
+              lease "$branch" "$branch"
+            done
+          fi
+
+          key="$RUNNER_TEMP/deploy-key"
+          printf '%s\n' "$SYNC_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git push --atomic "git@github.com:$GITHUB_REPOSITORY.git" "${args[@]}"
+          rm "$key"
+          echo "Pushed ${args[*]}" | tee -a "$GITHUB_STEP_SUMMARY"
