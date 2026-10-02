@@ -1,7 +1,7 @@
 import { ValidModeRule } from "@monkeytype/schemas/configuration";
 import { Language } from "@monkeytype/schemas/languages";
 import { Mode } from "@monkeytype/schemas/shared";
-import { Accessor, For, JSXElement, Show } from "solid-js";
+import { Accessor, createEffect, For, JSXElement, Show } from "solid-js";
 
 import { isAuthenticated } from "../../../states/core";
 import { Selection } from "../../../states/leaderboard-selection";
@@ -50,6 +50,19 @@ export function Sidebar(props: {
   const selectFriendsOnly = (friendsOnly: boolean) => {
     updateSelection({ friendsOnly });
   };
+
+  // the selection is remembered and starts at time 15, switch to a configured
+  // all-time leaderboard if it isn't one
+  createEffect(() => {
+    const selection = props.selection();
+    if (
+      selection.type === "allTime" &&
+      props.allTimeModes.length > 0 &&
+      !isValidAllTimeSelection(selection, props.allTimeModes)
+    ) {
+      updateSelection({});
+    }
+  });
 
   return (
     <>
@@ -105,6 +118,21 @@ export function Sidebar(props: {
         />
       </Show>
     </>
+  );
+}
+
+/**
+ * true if the selection is an all-time leaderboard of the configured time modes
+ */
+export function isValidAllTimeSelection(
+  selection: Selection,
+  allTimeModes: string[],
+): boolean {
+  return (
+    selection.type === "allTime" &&
+    selection.mode === "time" &&
+    allTimeModes.includes(selection.mode2) &&
+    selection.language === "english"
   );
 }
 

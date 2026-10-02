@@ -30,7 +30,7 @@ import { Page } from "../../common/Page";
 import { Separator } from "../../common/Separator";
 import { Navigation } from "./Navigation";
 import { NextUpdate } from "./NextUpdate";
-import { Sidebar } from "./Sidebar";
+import { isValidAllTimeSelection, Sidebar } from "./Sidebar";
 import { Table } from "./Table";
 import { Title } from "./Title";
 import { UserRank } from "./UserRank";
@@ -63,7 +63,7 @@ export function LeaderboardPage(): JSXElement {
 
   //prefetch next page
   createEffect(() => {
-    if (isOpen()) {
+    if (isOpen() && isSelectionValid()) {
       void queryClient.prefetchQuery(
         getLeaderboardQueryOptions({
           ...getSelection(),
@@ -99,22 +99,34 @@ export function LeaderboardPage(): JSXElement {
     }
   });
 
+  const serverConfigurationQuery = useQuery(() => ({
+    ...getServerConfigurationQueryOptions(),
+    enabled: isOpen(),
+  }));
+
+  // the selection is remembered and starts at time 15, don't load all-time
+  // leaderboards until the sidebar switched it to a configured one
+  const isSelectionValid = (): boolean => {
+    const selection = getSelection();
+    if (selection.type !== "allTime") return true;
+    const config = serverConfigurationQuery.data;
+    return (
+      config !== undefined &&
+      isValidAllTimeSelection(selection, config.leaderboards.allTime.timeModes)
+    );
+  };
+
   const entriesQuery = useQuery(() => ({
     ...getLeaderboardQueryOptions({
       ...getSelection(),
       page: getPage() ?? 0,
     }),
-    enabled: isOpen(),
+    enabled: isOpen() && isSelectionValid(),
   }));
 
   const rankQuery = useQuery(() => ({
     ...getRankQueryOptions(getSelection()),
-    enabled: isAuthenticated() && isOpen(),
-  }));
-
-  const serverConfigurationQuery = useQuery(() => ({
-    ...getServerConfigurationQueryOptions(),
-    enabled: isOpen(),
+    enabled: isAuthenticated() && isOpen() && isSelectionValid(),
   }));
 
   const onSelectionChange = (newSelection: Selection) => {
