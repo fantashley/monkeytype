@@ -10,6 +10,10 @@ import {
 } from "@tanstack/solid-db";
 import { Accessor, createSignal } from "solid-js";
 import Ape from "../ape";
+import {
+  configurationPromise,
+  get as getServerConfiguration,
+} from "../ape/server-configuration";
 import { queryClient } from "../queries";
 import { baseKey } from "../queries/utils/keys";
 import { isAuthenticated } from "../states/core";
@@ -51,6 +55,12 @@ const inboxCollection = createCollection(
               ? "read"
               : "unread",
       });
+
+      await configurationPromise;
+      if (!getServerConfiguration()?.users.inbox.enabled) {
+        setMaxMailboxSize(0);
+        return [];
+      }
 
       const response = await Ape.users.getInbox();
       if (response.status !== 200) {
