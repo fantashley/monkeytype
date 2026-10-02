@@ -21,8 +21,12 @@ concurrency:
 
 jobs:
   check:
-    # sync branches are checked on push
-    if: github.event_name == 'push' || !startsWith(github.head_ref, 'sync/')
+    # this repository's sync branches are checked on push, PRs from other
+    # repositories are checked like any other PR whatever their branch name
+    if: >-
+      github.event_name == 'push' ||
+      !startsWith(github.head_ref, 'sync/') ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -55,8 +59,12 @@ jobs:
           pnpm --filter @monkeytype/frontend run test
 
   nix:
-    # sync branches are checked on push
-    if: github.event_name == 'push' || !startsWith(github.head_ref, 'sync/')
+    # this repository's sync branches are checked on push, PRs from other
+    # repositories are checked like any other PR whatever their branch name
+    if: >-
+      github.event_name == 'push' ||
+      !startsWith(github.head_ref, 'sync/') ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
