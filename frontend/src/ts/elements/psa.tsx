@@ -3,6 +3,7 @@ import { IdSchema } from "@monkeytype/schemas/util";
 import { isSafeNumber } from "@monkeytype/util/numbers";
 import { tryCatch } from "@monkeytype/util/trycatch";
 import { format } from "date-fns/format";
+import { Show } from "solid-js";
 import { z } from "zod";
 
 import Ape from "../ape";
@@ -10,7 +11,7 @@ import { authEvent } from "../events/auth";
 import { addBanner } from "../states/banners";
 import { addPsa } from "../states/psas";
 import { secondsToString } from "../utils/date-and-time";
-import { isDevEnvironment } from "../utils/env";
+import { isDevEnvironment, isSelfHosted } from "../utils/env";
 import { LocalStorageWithSchema } from "../utils/local-storage-with-schema";
 
 const confirmedPSAs = new LocalStorageWithSchema({
@@ -41,6 +42,12 @@ async function getLatest(): Promise<PSA[] | null> {
       addBanner({
         level: "notice",
         text: "Dev Info: Backend server not running",
+        icon: "fas fa-exclamation-triangle",
+      });
+    } else if (isSelfHosted()) {
+      addBanner({
+        level: "error",
+        text: "Looks like the server is experiencing unexpected down time.",
         icon: "fas fa-exclamation-triangle",
       });
     } else {
@@ -131,10 +138,12 @@ async function getLatest(): Promise<PSA[] | null> {
       customContent: (
         <>
           Server is currently under maintenance.{" "}
-          <a target="_blank" href="https://monkeytype.instatus.com/">
-            Check the status page
-          </a>{" "}
-          for more info.
+          <Show when={!isSelfHosted()}>
+            <a target="_blank" href="https://monkeytype.instatus.com/">
+              Check the status page
+            </a>{" "}
+            for more info.
+          </Show>
         </>
       ),
     });

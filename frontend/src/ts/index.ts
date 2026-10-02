@@ -25,6 +25,7 @@ import "./test/tts";
 import { addToGlobal } from "./utils/misc";
 import * as Focus from "./test/focus";
 import { fetchLatestVersion } from "./utils/version";
+import { isSelfHosted } from "./utils/env";
 import * as Sentry from "./sentry";
 import * as Cookies from "./cookies";
 import "./elements/psa";
@@ -69,7 +70,8 @@ void fetchLatestVersion().then((data) => {
 
 Focus.set(true, true);
 const accepted = Cookies.getAcceptedCookies();
-if (accepted === null) {
+// self hosted instances only use essential cookies
+if (accepted === null && !isSelfHosted()) {
   showModal("Cookies");
 }
 void init(onAuthStateChanged).then(() => {

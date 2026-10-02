@@ -55,7 +55,8 @@
         "RECAPTCHA_SITE_KEY",
         "SENTRY",
         "AUTH_PROVIDER",
-        "OIDC_*"
+        "OIDC_*",
+        "SELF_HOSTED"
       ],
       "outputs": ["dist/**"]
     },
@@ -66,7 +67,8 @@
         "RECAPTCHA_SITE_KEY",
         "SERVER_OPEN",
         "AUTH_PROVIDER",
-        "OIDC_*"
+        "OIDC_*",
+        "SELF_HOSTED"
       ],
       "persistent": true
     },
