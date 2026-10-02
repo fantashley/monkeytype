@@ -30,7 +30,7 @@ import { Page } from "../../common/Page";
 import { Separator } from "../../common/Separator";
 import { Navigation } from "./Navigation";
 import { NextUpdate } from "./NextUpdate";
-import { Sidebar } from "./Sidebar";
+import { isValidAllTimeSelection, Sidebar } from "./Sidebar";
 import { Table } from "./Table";
 import { Title } from "./Title";
 import { UserRank } from "./UserRank";
@@ -42,21 +42,28 @@ export function LeaderboardPage(): JSXElement {
 
   const [scrollToUser, setScrollToUser] = createSignal(false);
 
-  //invalidate cache for daily and weekly lb on close
+  //invalidate cache for daily and weekly lb on close, and all-time lb if it updates after every test
   createEffectOn(isOpen, (open) => {
     if (!open) {
+      const types = ["weekly", "daily"];
+      if (
+        queryClient.getQueryData(getServerConfigurationQueryOptions().queryKey)
+          ?.leaderboards.allTime.updateOnResult === true
+      ) {
+        types.push("allTime");
+      }
       void queryClient.invalidateQueries({
         predicate: (query) =>
           query.queryKey.length >= 3 &&
           query.queryKey[1] === "leaderboard" &&
-          ["weekly", "daily"].includes(query.queryKey[2] as string),
+          types.includes(query.queryKey[2] as string),
       });
     }
   });
 
   //prefetch next page
   createEffect(() => {
-    if (isOpen()) {
+    if (isOpen() && isSelectionValid()) {
       void queryClient.prefetchQuery(
         getLeaderboardQueryOptions({
           ...getSelection(),
@@ -92,22 +99,37 @@ export function LeaderboardPage(): JSXElement {
     }
   });
 
+  const serverConfigurationQuery = useQuery(() => ({
+    ...getServerConfigurationQueryOptions(),
+    enabled: isOpen(),
+  }));
+
+  // the selection is remembered and starts at time 15, don't load leaderboards
+  // until the sidebar switched it to an enabled and configured one
+  const isSelectionValid = (): boolean => {
+    const selection = getSelection();
+    const config = serverConfigurationQuery.data;
+    if (selection.type === "weekly") {
+      return config?.leaderboards.weeklyXp.enabled === true;
+    }
+    if (selection.type !== "allTime") return true;
+    return (
+      config !== undefined &&
+      isValidAllTimeSelection(selection, config.leaderboards.allTime.timeModes)
+    );
+  };
+
   const entriesQuery = useQuery(() => ({
     ...getLeaderboardQueryOptions({
       ...getSelection(),
       page: getPage() ?? 0,
     }),
-    enabled: isOpen(),
+    enabled: isOpen() && isSelectionValid(),
   }));
 
   const rankQuery = useQuery(() => ({
     ...getRankQueryOptions(getSelection()),
-    enabled: isAuthenticated() && isOpen(),
-  }));
-
-  const serverConfigurationQuery = useQuery(() => ({
-    ...getServerConfigurationQueryOptions(),
-    enabled: isOpen(),
+    enabled: isAuthenticated() && isOpen() && isSelectionValid(),
   }));
 
   const onSelectionChange = (newSelection: Selection) => {
@@ -176,6 +198,9 @@ export function LeaderboardPage(): JSXElement {
             {({ serverConfigurationQueryData }) => (
               <Sidebar
                 selection={getSelection}
+                allTimeModes={
+                  serverConfigurationQueryData().leaderboards.allTime.timeModes
+                }
                 onSelect={onSelectionChange}
                 validModeRules={
                   serverConfigurationQueryData().dailyLeaderboards
@@ -183,6 +208,9 @@ export function LeaderboardPage(): JSXElement {
                 }
                 connectionsEnabled={
                   serverConfigurationQueryData().connections.enabled
+                }
+                weeklyXpEnabled={
+                  serverConfigurationQueryData().leaderboards.weeklyXp.enabled
                 }
               />
             )}
@@ -259,7 +287,13 @@ export function LeaderboardPage(): JSXElement {
                     "mb-2 grid grid-cols-1 items-center justify-between gap-2 text-sm sm:grid-cols-2 sm:text-base",
                   )}
                 >
-                  <NextUpdate type={getSelection().type} />
+                  <NextUpdate
+                    type={getSelection().type}
+                    updateOnResult={
+                      serverConfigurationQuery.data?.leaderboards.allTime
+                        .updateOnResult ?? false
+                    }
+                  />
                   <Navigation
                     isLoading={
                       entriesQuery.isLoading ||

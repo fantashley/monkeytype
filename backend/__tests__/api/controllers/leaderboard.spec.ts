@@ -8,6 +8,7 @@ import * as WeeklyXpLeaderboard from "../../../src/services/weekly-xp-leaderboar
 import * as Configuration from "../../../src/init/configuration";
 import { mockAuthenticateWithApeKey } from "../../__testData__/auth";
 import { XpLeaderboardEntry } from "@monkeytype/schemas/leaderboards";
+import { Configuration as ServerConfiguration } from "@monkeytype/schemas/configuration";
 
 const { mockApp, uid } = setup();
 const configuration = Configuration.getCachedConfiguration();
@@ -207,6 +208,29 @@ describe("Loaderboard Controller", () => {
             .expect(expectStatus);
         },
       );
+
+      describe("with configured time modes", () => {
+        beforeEach(async () => {
+          await setAllTimeTimeModes(["15", "30"]);
+        });
+        afterEach(async () => {
+          await setAllTimeTimeModes(["15", "60"]);
+        });
+
+        it.for([
+          { mode2: "15", expectStatus: 200 },
+          { mode2: "30", expectStatus: 200 },
+          { mode2: "60", expectStatus: 404 },
+        ])(
+          "expect $expectStatus for mode2 $mode2",
+          async ({ mode2, expectStatus }) => {
+            await mockApp
+              .get("/leaderboards")
+              .query({ language: "english", mode: "time", mode2 })
+              .expect(expectStatus);
+          },
+        );
+      });
     });
 
     it("fails for missing query", async () => {
@@ -1475,6 +1499,19 @@ async function weeklyLeaderboardEnabled(enabled: boolean): Promise<void> {
   mockConfig.leaderboards.weeklyXp = {
     ...mockConfig.leaderboards.weeklyXp,
     enabled,
+  };
+
+  vi.spyOn(Configuration, "getCachedConfiguration").mockResolvedValue(
+    mockConfig,
+  );
+}
+async function setAllTimeTimeModes(
+  timeModes: ServerConfiguration["leaderboards"]["allTime"]["timeModes"],
+): Promise<void> {
+  const mockConfig = await configuration;
+  mockConfig.leaderboards.allTime = {
+    ...mockConfig.leaderboards.allTime,
+    timeModes,
   };
 
   vi.spyOn(Configuration, "getCachedConfiguration").mockResolvedValue(

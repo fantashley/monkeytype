@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DefaultTimeModeSchema } from "./shared";
 
 /* ValidModeRuleSchema allows complex rules like `"mode2": "(15|60)"`. We don't want a strict validation here. */
 export const ValidModeRuleSchema = z
@@ -119,6 +120,16 @@ export const ConfigurationSchema = z.object({
       .describe(
         "Minimum typing time (in seconds) the user needs to get on a leaderboard",
       ),
+    allTime: z.object({
+      timeModes: z
+        .array(DefaultTimeModeSchema)
+        .describe("English time modes with an all-time leaderboard"),
+      updateOnResult: z
+        .boolean()
+        .describe(
+          "Update the all-time leaderboards right after a result changes them, instead of only every 15 minutes. Every update ranks all users, only enable this on small instances",
+        ),
+    }),
     weeklyXp: z.object({
       enabled: z.boolean(),
       expirationTimeInDays: z.number().nonnegative(),

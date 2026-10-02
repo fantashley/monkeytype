@@ -462,6 +462,7 @@ export async function checkIfPb(
   uid: string,
   user: Pick<DBUser, "personalBests" | "lbPersonalBests">,
   result: Result,
+  lbTimeModes: string[],
 ): Promise<boolean> {
   const { mode } = result;
 
@@ -489,7 +490,12 @@ export async function checkIfPb(
     time: {},
   };
 
-  const pb = checkAndUpdatePb(user.personalBests, user.lbPersonalBests, result);
+  const pb = checkAndUpdatePb(
+    user.personalBests,
+    user.lbPersonalBests,
+    result,
+    lbTimeModes,
+  );
 
   if (!pb.isPb) return false;
 

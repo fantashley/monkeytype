@@ -37,7 +37,9 @@ export async function getLeaderboard(
 
   if (
     mode !== "time" ||
-    (mode2 !== "15" && mode2 !== "60") ||
+    !req.ctx.configuration.leaderboards.allTime.timeModes.some(
+      (it) => it === mode2,
+    ) ||
     language !== "english"
   ) {
     throw new MonkeyError(404, "There is no leaderboard for this mode");

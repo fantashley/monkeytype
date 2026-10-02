@@ -175,6 +175,7 @@ describe("Pb Utils", () => {
           userPbs,
           structuredClone(lbPb) as pb.LbPersonalBests,
           result15,
+          ["15", "60"],
         );
 
         expect(lbPbPb).toEqual({
@@ -208,6 +209,30 @@ describe("Pb Utils", () => {
           },
         });
       }
+    });
+
+    it("should only update leaderboard personal bests of the given time modes", () => {
+      const result15 = {
+        mode: "time",
+        mode2: "15",
+      } as unknown as Result<Mode>;
+
+      expect(
+        pb.updateLeaderboardPersonalBests(userPbs, { time: {} }, result15, [
+          "30",
+          "60",
+        ]),
+      ).toBeNull();
+      expect(
+        pb.updateLeaderboardPersonalBests(userPbs, { time: {} }, result15, [
+          "15",
+          "30",
+        ]),
+      ).toEqual({
+        time: {
+          "15": expect.objectContaining({ english: userPbs.time["15"]?.[0] }),
+        },
+      });
     });
   });
 });

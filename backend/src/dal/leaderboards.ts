@@ -409,14 +409,16 @@ async function createIndex(
 }
 
 export async function createIndicies(): Promise<void> {
-  const minTimeTyping = (await getLiveConfiguration()).leaderboards
-    .minTimeTyping;
-  await createIndex("lbPersonalBests.time.15.english", minTimeTyping);
-  await createIndex("lbPersonalBests.time.60.english", minTimeTyping);
+  const { minTimeTyping, allTime } = (await getLiveConfiguration())
+    .leaderboards;
+  for (const mode2 of allTime.timeModes) {
+    await createIndex(`lbPersonalBests.time.${mode2}.english`, minTimeTyping);
+  }
 
   if (isDevEnvironment()) {
     Logger.info("Updating leaderboards in dev mode...");
-    await update("time", "15", "english");
-    await update("time", "60", "english");
+    for (const mode2 of allTime.timeModes) {
+      await update("time", mode2, "english");
+    }
   }
 }

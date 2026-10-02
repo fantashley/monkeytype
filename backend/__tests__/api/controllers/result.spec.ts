@@ -5,6 +5,7 @@ import * as ResultDal from "../../../src/dal/result";
 import * as UserDal from "../../../src/dal/user";
 import * as PublicDal from "../../../src/dal/public";
 import * as LogsDal from "../../../src/dal/logs";
+import * as UpdateLeaderboards from "../../../src/jobs/update-leaderboards";
 import { ObjectId } from "mongodb";
 import { mockAuthenticateWithApeKey } from "../../__testData__/auth";
 import { enableRateLimitExpects } from "../../__testData__/rate-limit";
@@ -664,6 +665,48 @@ describe("result controller test", () => {
         15.1 + 2 - 5, //duration + incompleteTestSeconds-afk
       );
     });
+    describe("all-time leaderboard updates", () => {
+      const updateLeaderboardMock = vi.spyOn(
+        UpdateLeaderboards,
+        "updateLeaderboard",
+      );
+
+      beforeEach(() => {
+        updateLeaderboardMock.mockClear().mockResolvedValue();
+      });
+      afterEach(async () => {
+        await enableAllTimeUpdateOnResult(false);
+      });
+
+      async function addResult(): Promise<void> {
+        await mockApp
+          .post("/results")
+          .set("Authorization", `Bearer ${uid}`)
+          .send({ result: buildCompletedEvent() })
+          .expect(200);
+      }
+
+      it("should update the leaderboard after a pb if enabled", async () => {
+        await enableAllTimeUpdateOnResult(true);
+
+        await addResult();
+
+        expect(updateLeaderboardMock).toHaveBeenCalledExactlyOnceWith("15");
+      });
+      it("should not update the leaderboard by default", async () => {
+        await addResult();
+
+        expect(updateLeaderboardMock).not.toHaveBeenCalled();
+      });
+      it("should not update the leaderboard without a pb", async () => {
+        await enableAllTimeUpdateOnResult(true);
+        userCheckIfPbMock.mockResolvedValue(false);
+
+        await addResult();
+
+        expect(updateLeaderboardMock).not.toHaveBeenCalled();
+      });
+    });
     it("should fail if result saving is disabled", async () => {
       //GIVEN
       await enableResultsSaving(false);
@@ -851,6 +894,17 @@ async function acceptApeKeys(enabled: boolean): Promise<void> {
   );
 }
 
+async function enableAllTimeUpdateOnResult(enabled: boolean): Promise<void> {
+  const mockConfig = await configuration;
+  mockConfig.leaderboards.allTime = {
+    ...mockConfig.leaderboards.allTime,
+    updateOnResult: enabled,
+  };
+
+  vi.spyOn(Configuration, "getCachedConfiguration").mockResolvedValue(
+    mockConfig,
+  );
+}
 async function enableResultsSaving(enabled: boolean): Promise<void> {
   const mockConfig = await configuration;
   mockConfig.results = { ...mockConfig.results, savingEnabled: enabled };

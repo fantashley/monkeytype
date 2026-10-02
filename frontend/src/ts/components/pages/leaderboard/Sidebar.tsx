@@ -1,7 +1,7 @@
 import { ValidModeRule } from "@monkeytype/schemas/configuration";
 import { Language } from "@monkeytype/schemas/languages";
 import { Mode } from "@monkeytype/schemas/shared";
-import { Accessor, For, JSXElement, Show } from "solid-js";
+import { Accessor, createEffect, For, JSXElement, Show } from "solid-js";
 
 import { isAuthenticated } from "../../../states/core";
 import { Selection } from "../../../states/leaderboard-selection";
@@ -22,15 +22,17 @@ export type ModeSelect = Pick<Selection, "mode" | "mode2">;
 
 export function Sidebar(props: {
   selection: Accessor<Selection>;
+  allTimeModes: string[];
   onSelect: (selection: Selection) => void;
   validModeRules: ValidModeRule[];
   connectionsEnabled: boolean;
+  weeklyXpEnabled: boolean;
 }): JSXElement {
   const updateSelection = (patch: Partial<Selection>) => {
     props.onSelect(
       normalizeSelection(
         { ...props.selection(), ...patch } as Selection,
-        getValidLeaderboards(props.validModeRules),
+        getValidLeaderboards(props.allTimeModes, props.validModeRules),
       ),
     );
   };
@@ -50,20 +52,32 @@ export function Sidebar(props: {
     updateSelection({ friendsOnly });
   };
 
+  // the selection is remembered and starts at time 15, switch to a configured
+  // all-time leaderboard if it isn't one
+  createEffect(() => {
+    const selection = props.selection();
+    if (
+      selection.type === "allTime" &&
+      props.allTimeModes.length > 0 &&
+      !isValidAllTimeSelection(selection, props.allTimeModes)
+    ) {
+      updateSelection({});
+    }
+  });
+
+  // the selection is remembered, leave the weekly leaderboard once it is disabled
+  createEffect(() => {
+    if (!props.weeklyXpEnabled && props.selection().type === "weekly") {
+      selectType("allTime");
+    }
+  });
+
   return (
     <>
       <Group
         selected={props.selection().type}
         onSelect={selectType}
-        items={[
-          {
-            id: "allTime",
-            text: "all-time english",
-            icon: "fa-globe-americas",
-          },
-          { id: "weekly", text: "weekly xp", icon: "fa-calendar-day" },
-          { id: "daily", text: "daily", icon: "fa-sun" },
-        ]}
+        items={getTypeButtons(props.weeklyXpEnabled)}
       />
       <Show when={isAuthenticated() && props.connectionsEnabled}>
         <Group
@@ -84,7 +98,9 @@ export function Sidebar(props: {
           }}
           onSelect={selectMode}
           items={getModeButtons(
-            getValidLeaderboards(props.validModeRules)[props.selection().type],
+            getValidLeaderboards(props.allTimeModes, props.validModeRules)[
+              props.selection().type
+            ],
             props.selection().language,
           )}
         />
@@ -94,7 +110,8 @@ export function Sidebar(props: {
           selected={props.selection().language}
           onSelect={selectLanguage}
           items={getLanguageButtons(
-            getValidLeaderboards(props.validModeRules).daily,
+            getValidLeaderboards(props.allTimeModes, props.validModeRules)
+              .daily,
             props.selection().mode,
             props.selection().mode2,
           )}
@@ -102,6 +119,35 @@ export function Sidebar(props: {
       </Show>
     </>
   );
+}
+
+/**
+ * true if the selection is an all-time leaderboard of the configured time modes
+ */
+export function isValidAllTimeSelection(
+  selection: Selection,
+  allTimeModes: string[],
+): boolean {
+  return (
+    selection.type === "allTime" &&
+    selection.mode === "time" &&
+    allTimeModes.includes(selection.mode2) &&
+    selection.language === "english"
+  );
+}
+
+/**
+ * the leaderboard types, without the ones disabled by the server configuration
+ */
+export function getTypeButtons(
+  weeklyXpEnabled: boolean,
+): GroupItem<Selection["type"]>[] {
+  const types: GroupItem<Selection["type"]>[] = [
+    { id: "allTime", text: "all-time english", icon: "fa-globe-americas" },
+    { id: "weekly", text: "weekly xp", icon: "fa-calendar-day" },
+    { id: "daily", text: "daily", icon: "fa-sun" },
+  ];
+  return types.filter((it) => it.id !== "weekly" || weeklyXpEnabled);
 }
 
 function Group<T>(props: {
@@ -214,6 +260,7 @@ function getLanguageButtons(
   }));
 }
 function getValidLeaderboards(
+  allTimeModes: string[],
   validModeRules: ValidModeRule[],
 ): ValidLeaderboards {
   //a rule can contain multiple values. create a flat list out of them
@@ -230,10 +277,9 @@ function getValidLeaderboards(
 
   return {
     allTime: {
-      time: {
-        "15": ["english"],
-        "60": ["english"],
-      },
+      time: Object.fromEntries(
+        allTimeModes.map((mode2) => [mode2, ["english"] as Language[]]),
+      ),
     },
     weekly: {},
     daily: dailyRules.reduce<

@@ -24,6 +24,7 @@ export function checkAndUpdatePb(
   userPersonalBests: PersonalBests,
   lbPersonalBests: LbPersonalBests | undefined,
   result: Result,
+  lbTimeModes: string[] = [],
 ): CheckAndUpdatePbResult {
   const mode = result.mode;
   const mode2 = result.mode2;
@@ -50,6 +51,7 @@ export function checkAndUpdatePb(
       userPb,
       lbPersonalBests,
       result,
+      lbTimeModes,
     );
     if (newLbPb !== null) {
       lbPersonalBests = newLbPb;
@@ -163,8 +165,9 @@ export function updateLeaderboardPersonalBests(
   userPersonalBests: PersonalBests,
   lbPersonalBests: LbPersonalBests,
   result: Result,
+  lbTimeModes: string[],
 ): LbPersonalBests | null {
-  if (!shouldUpdateLeaderboardPersonalBests(result)) {
+  if (!shouldUpdateLeaderboardPersonalBests(result, lbTimeModes)) {
     return null;
   }
   const lbPb = lbPersonalBests ?? {};
@@ -203,8 +206,11 @@ export function updateLeaderboardPersonalBests(
   return lbPb;
 }
 
-function shouldUpdateLeaderboardPersonalBests(result: Result): boolean {
+function shouldUpdateLeaderboardPersonalBests(
+  result: Result,
+  lbTimeModes: string[],
+): boolean {
   const isValidTimeMode =
-    result.mode === "time" && (result.mode2 === "15" || result.mode2 === "60");
+    result.mode === "time" && lbTimeModes.includes(result.mode2);
   return isValidTimeMode && !result.lazyMode;
 }

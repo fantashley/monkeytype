@@ -14,6 +14,7 @@ import { secondsToString } from "../../../utils/date-and-time";
 
 export function NextUpdate(props: {
   type: LeaderboardType;
+  updateOnResult: boolean;
   class?: string;
 }): JSXElement {
   const [tick, setTick] = createSignal(Date.now());
@@ -29,6 +30,8 @@ export function NextUpdate(props: {
     if (props.type === "daily") {
       const diff = differenceInSeconds(endOfDay(new UTCDateMini()), now);
       return `Next reset in: ${secondsToString(diff, true)}`;
+    } else if (props.type === "allTime" && props.updateOnResult) {
+      return "Updates after every test";
     } else if (props.type === "allTime") {
       const minutesToNextUpdate = 14 - (now.getMinutes() % 15);
       const secondsToNextUpdate = 60 - now.getSeconds();

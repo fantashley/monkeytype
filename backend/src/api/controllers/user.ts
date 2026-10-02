@@ -546,7 +546,10 @@ export async function getUser(req: MonkeyRequest): Promise<GetUserResponse> {
 
   const isPremium = await UserDAL.checkIfUserIsPremium(uid, userInfo);
 
-  const allTimeLbs = await getAllTimeLbs(uid);
+  const allTimeLbs = await getAllTimeLbs(
+    uid,
+    req.ctx.configuration.leaderboards.allTime.timeModes,
+  );
   const testActivity = generateCurrentTestActivity(userInfo.testActivity);
   const relevantUserInfo = getRelevantUserInfo(userInfo);
 
@@ -942,7 +945,10 @@ export async function getProfile(
     return new MonkeyResponse("Profile retrived: banned user", baseProfile);
   }
 
-  const allTimeLbs = await getAllTimeLbs(user.uid);
+  const allTimeLbs = await getAllTimeLbs(
+    user.uid,
+    req.ctx.configuration.leaderboards.allTime.timeModes,
+  );
 
   const profileData = {
     ...baseProfile,
@@ -1095,59 +1101,23 @@ export async function revokeAllTokens(
   return new MonkeyResponse("All tokens revoked", null);
 }
 
-async function getAllTimeLbs(uid: string): Promise<AllTimeLbs> {
-  const allTime15English = await LeaderboardsDAL.getRank(
-    "time",
-    "15",
-    "english",
-    uid,
-  );
+async function getAllTimeLbs(
+  uid: string,
+  timeModes: string[],
+): Promise<AllTimeLbs> {
+  const allTimeLbs: AllTimeLbs = { time: {} };
+  for (const mode2 of timeModes) {
+    const rank = await LeaderboardsDAL.getRank("time", mode2, "english", uid);
+    const count = await LeaderboardsDAL.getCount("time", mode2, "english");
 
-  const allTime15EnglishCount = await LeaderboardsDAL.getCount(
-    "time",
-    "15",
-    "english",
-  );
-
-  const allTime60English = await LeaderboardsDAL.getRank(
-    "time",
-    "60",
-    "english",
-    uid,
-  );
-
-  const allTime60EnglishCount = await LeaderboardsDAL.getCount(
-    "time",
-    "60",
-    "english",
-  );
-
-  const english15 =
-    allTime15English === false || allTime15English === null
-      ? undefined
-      : {
-          rank: allTime15English.rank,
-          count: allTime15EnglishCount,
-        };
-
-  const english60 =
-    allTime60English === false || allTime60English === null
-      ? undefined
-      : {
-          rank: allTime60English.rank,
-          count: allTime60EnglishCount,
-        };
-
-  return {
-    time: {
-      "15": {
-        english: english15,
-      },
-      "60": {
-        english: english60,
-      },
-    },
-  };
+    allTimeLbs.time[mode2] = {
+      english:
+        rank === false || rank === null
+          ? undefined
+          : { rank: rank.rank, count },
+    };
+  }
+  return allTimeLbs;
 }
 
 export function generateCurrentTestActivity(
