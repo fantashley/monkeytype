@@ -1,0 +1,175 @@
+# Fork only: opens a PR that merges the latest upstream release into release.
+#
+# release is the fork's only long-lived branch: upstream Monkeytype plus the
+# fork's changes, which are made through PRs against release. dotfiles picks it
+# up in its daily flake update, so merging a PR into release deploys it.
+#
+# Runs daily and by hand. When release doesn't have the latest upstream release
+# yet and there's no sync/<tag> branch for it, it:
+#   - merges the upstream release into release as sync/<tag>, refreshes the pnpm
+#     dependency hash in nix/package.nix and opens a PR against release, checked
+#     by .github/workflows/release-ci.yml
+#   - on a conflict pushes the upstream release itself as sync/<tag> and opens
+#     the PR with the commands to resolve it
+#
+# Pushes use the SYNC_DEPLOY_KEY deploy key (write access): the GITHUB_TOKEN
+# can't push commits that change workflow files, which upstream releases do,
+# and its pushes don't start other workflows. Opening the PR needs "Allow
+# GitHub Actions to create and approve pull requests" in the repository's
+# Actions settings.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Upstream ref to merge instead of the latest release (e.g. a tag)
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+
+env:
+  UPSTREAM: monkeytypegame/monkeytype
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find the upstream release
+        id: target
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          ref="$INPUT_REF"
+          if [ -z "$ref" ]; then
+            ref=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          fi
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --no-tags upstream "$ref"
+          commit=$(git rev-parse "FETCH_HEAD^{commit}")
+          branch="sync/${ref//[^A-Za-z0-9._-]/-}"
+
+          if git merge-base --is-ancestor "$commit" origin/release; then
+            echo "Upstream $ref is already in release" | tee -a "$GITHUB_STEP_SUMMARY"
+            needed=false
+          elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "$branch already exists, see its PR" | tee -a "$GITHUB_STEP_SUMMARY"
+            needed=false
+          else
+            needed=true
+          fi
+          {
+            echo "ref=$ref"
+            echo "commit=$commit"
+            echo "branch=$branch"
+            echo "needed=$needed"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Merge the upstream release
+        id: merge
+        if: steps.target.outputs.needed == 'true'
+        env:
+          REF: ${{ steps.target.outputs.ref }}
+          COMMIT: ${{ steps.target.outputs.commit }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --quiet -b "$BRANCH"
+          if git merge --no-ff --no-edit -m "Merge upstream $REF" "$COMMIT"; then
+            echo "conflicts=" >> "$GITHUB_OUTPUT"
+            echo "Merged upstream $REF into $BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            conflicts=$(git diff --name-only --diff-filter=U | paste -sd " " -)
+            git merge --abort
+            # the PR shows the conflicts, they're resolved by merging the PR
+            # branch into release locally and pushing the result to it
+            git checkout --quiet -B "$BRANCH" "$COMMIT"
+            echo "conflicts=$conflicts" >> "$GITHUB_OUTPUT"
+            echo "::warning::Merging upstream $REF conflicts in: $conflicts"
+          fi
+
+      - uses: cachix/install-nix-action@v31
+        if: steps.target.outputs.needed == 'true' && steps.merge.outputs.conflicts == ''
+
+      - name: Update the pnpm dependency hash
+        if: steps.target.outputs.needed == 'true' && steps.merge.outputs.conflicts == ''
+        run: |
+          if nix build .#pnpmDeps --no-link 2> build.log; then
+            echo "pnpm dependency hash is up to date"
+            exit 0
+          fi
+          hash=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | awk '{print $2}')
+          if [ -z "$hash" ]; then
+            cat build.log
+            echo "::error::Building the pnpm dependencies failed"
+            exit 1
+          fi
+          sed -i -E "s|hash = \"sha256-[A-Za-z0-9+/=]+\";|hash = \"$hash\";|" nix/package.nix
+          nix build .#pnpmDeps --no-link
+          git commit -am "build(nix): update pnpm dependency hash"
+          echo "Updated the pnpm dependency hash" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the sync branch
+        if: steps.target.outputs.needed == 'true'
+        env:
+          SYNC_DEPLOY_KEY: ${{ secrets.SYNC_DEPLOY_KEY }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+        run: |
+          key="$RUNNER_TEMP/deploy-key"
+          printf '%s\n' "$SYNC_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          # a new branch, never overwrite one
+          git push "git@github.com:$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$BRANCH"
+          rm "$key"
+
+      - name: Open the PR
+        if: steps.target.outputs.needed == 'true'
+        env:
+          REF: ${{ steps.target.outputs.ref }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+        run: |
+          release_url="https://github.com/$UPSTREAM/releases/tag/$REF"
+          if [ -z "$CONFLICTS" ]; then
+            body="Merges upstream [$REF]($release_url) into \`release\`. Merging this PR deploys it."
+          else
+            body=$(cat <<EOF
+          Merges upstream [$REF]($release_url) into \`release\`. Merging this PR deploys it.
+
+          **Merging conflicts in:** $CONFLICTS
+
+          This branch only has the upstream release. Resolve the conflicts locally, then push the result to this branch:
+
+          \`\`\`sh
+          git fetch origin
+          git switch -C $BRANCH origin/release
+          git merge -m "Merge upstream $REF" origin/$BRANCH
+          # resolve the conflicts, git add, git merge --continue
+          # update the pnpm dependency hash in nix/package.nix if Release CI asks for it
+          git push origin $BRANCH
+          \`\`\`
+          EOF
+            )
+          fi
+          if ! gh pr create --repo "$GITHUB_REPOSITORY" --base release --head "$BRANCH" \
+            --title "chore: merge upstream $REF" --body "$body"; then
+            echo "::error::Couldn't open the PR, open it at https://github.com/$GITHUB_REPOSITORY/compare/release...$BRANCH"
+            exit 1
+          fi

@@ -1,0 +1,82 @@
+# Fork only: checks changes to release, the fork's deployed branch.
+#
+# Runs on PRs against release, and on pushes to the sync/* branches of
+# .github/workflows/sync-upstream.yml: their PRs are opened with the
+# GITHUB_TOKEN, which doesn't start workflows, so they're checked on push.
+# Upstream's Monkey CI only runs for master.
+name: Release CI
+
+on:
+  pull_request:
+    branches: [release]
+  push:
+    branches: ["sync/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # sync branches are checked on push
+    if: github.event_name == 'push' || !startsWith(github.head_ref, 'sync/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "./packages/*" --recursive run build
+          cp frontend/src/ts/constants/firebase-config-example.ts frontend/src/ts/constants/firebase-config.ts
+
+      - name: Lint
+        run: |
+          pnpm --filter @monkeytype/backend run lint
+          pnpm --filter @monkeytype/frontend run lint
+          pnpm --filter @monkeytype/frontend run madge
+
+      - name: Test
+        run: |
+          pnpm --filter @monkeytype/backend run test
+          pnpm --filter @monkeytype/frontend run test
+
+  nix:
+    # sync branches are checked on push
+    if: github.event_name == 'push' || !startsWith(github.head_ref, 'sync/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Check the pnpm dependency hash
+        run: |
+          if nix build .#pnpmDeps --no-link 2> build.log; then
+            exit 0
+          fi
+          cat build.log
+          hash=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | awk '{print $2}')
+          if [ -n "$hash" ]; then
+            echo "::error file=nix/package.nix::The pnpm dependency hash is outdated, set it to $hash"
+          fi
+          exit 1
+
+      - name: Build the nix packages
+        run: nix build .#backend .#frontend -L
