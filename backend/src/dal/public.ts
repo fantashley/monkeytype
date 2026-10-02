@@ -54,16 +54,10 @@ export async function getSpeedHistogram(
 }
 
 /** Get typing stats such as total number of tests completed on site */
-export async function getTypingStats(): Promise<PublicTypingStatsDB> {
+export async function getTypingStats(): Promise<TypingStats> {
   const stats = await db
     .collection<PublicTypingStatsDB>("public")
     .findOne({ _id: "stats" }, { projection: { _id: 0 } });
-  if (!stats) {
-    throw new MonkeyError(
-      404,
-      "Public typing stats not found",
-      "get typing stats",
-    );
-  }
-  return stats;
+  // the stats are created when the first result is saved, e.g. on a new installation
+  return stats ?? { testsCompleted: 0, testsStarted: 0, timeTyping: 0 };
 }
