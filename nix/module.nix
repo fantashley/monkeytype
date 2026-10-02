@@ -293,6 +293,8 @@ in
           "AF_INET"
           "AF_INET6"
           "AF_UNIX"
+          # swagger-stats reads the network interfaces on startup
+          "AF_NETLINK"
         ];
         RestrictNamespaces = true;
         RestrictRealtime = true;
