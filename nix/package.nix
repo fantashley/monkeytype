@@ -44,8 +44,13 @@ let
     ];
   };
 
+  # The store path of a fixed-output derivation only depends on its name and
+  # hash, so with the old hash a changed lockfile would get the old
+  # dependencies from a binary cache instead of failing. Naming it after the
+  # lockfile gives every lockfile its own path, fetched and checked against
+  # the hash the first time.
   pnpmDeps = fetchPnpmDeps {
-    pname = "monkeytype";
+    pname = "monkeytype-${builtins.substring 0 16 (builtins.hashFile "sha256" ../pnpm-lock.yaml)}";
     inherit version pnpm;
     src = workspaceSrc;
     fetcherVersion = 4;
