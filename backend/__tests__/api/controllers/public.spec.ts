@@ -125,7 +125,7 @@ describe("PublicController", () => {
         testsCompleted: 23,
         testsStarted: 42,
         timeTyping: 1000,
-      } as any);
+      });
 
       //WHEN
       const { body } = await mockApp.get("/public/typingStats").expect(200);
