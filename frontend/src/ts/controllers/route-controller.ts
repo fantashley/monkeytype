@@ -9,6 +9,8 @@ import { authEvent } from "../events/auth";
 import { queryClient } from "../queries";
 import { getServerConfigurationQueryOptions } from "../queries/server-configuration";
 import { tryCatch } from "@monkeytype/util/trycatch";
+import { z } from "zod";
+import { LocalStorageWithSchema } from "../utils/local-storage-with-schema";
 import {
   isTestRestarting,
   isResultCalculating,
@@ -43,16 +45,34 @@ type Route = {
   ) => Promise<void>;
 };
 
+// last known setting of the server, used when the configuration can't be fetched
+const loginRequiredLS = new LocalStorageWithSchema({
+  key: "loginRequired",
+  schema: z.boolean(),
+  fallback: false,
+});
+
 /**
  * true if the server only lets signed in users use the site.
- * The server enforces this, so if the configuration can't be fetched the site
- * stays usable like it would without an account.
+ * If the configuration can't be fetched, the last known setting is used. The
+ * server enforces this for its data, the typing test itself can't be protected
+ * from someone who never loaded the configuration or changes the client.
  */
 async function isLoginRequired(): Promise<boolean> {
   const { data } = await tryCatch(
     queryClient.fetchQuery(getServerConfigurationQueryOptions()),
   );
-  return data?.users.loginRequired ?? false;
+  if (data === null) return loginRequiredLS.get();
+
+  loginRequiredLS.set(data.users.loginRequired);
+  return data.users.loginRequired;
+}
+
+/**
+ * true if the user has to sign in before they can use the site
+ */
+async function mustSignIn(): Promise<boolean> {
+  return !isAuthenticated() && (await isLoginRequired());
 }
 
 const route404: Route = {
@@ -190,7 +210,8 @@ export async function navigate(
   }
 
   const noQuit = isFunboxActive("no_quit");
-  if (isTestActive() && noQuit) {
+  // signed out users have to leave the test when login is required
+  if (isTestActive() && noQuit && !(await mustSignIn())) {
     showNoticeNotification(
       "No quit funbox is active. Please finish the test.",
       {
@@ -220,11 +241,7 @@ export async function navigate(
 }
 
 async function router(options = {} as NavigateOptions): Promise<void> {
-  if (
-    location.pathname !== "/login" &&
-    !isAuthenticated() &&
-    (await isLoginRequired())
-  ) {
+  if (location.pathname !== "/login" && (await mustSignIn())) {
     await navigate("/login", options);
     return;
   }
