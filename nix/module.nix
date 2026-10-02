@@ -165,6 +165,17 @@ in
       '';
     };
 
+    loginRequired = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Only let signed in users use the site, including the typing test. Signed out
+        users only see the login page. Sets `users.loginRequired` in
+        {option}`services.monkeytype.settings` and enables sign up by default, the
+        login page is disabled otherwise.
+      '';
+    };
+
     database = {
       createLocally = mkOption {
         type = types.bool;
@@ -217,7 +228,16 @@ in
         assertion = !lib.hasSuffix "/" cfg.url;
         message = "services.monkeytype.url must not end with a slash";
       }
+      {
+        assertion = !cfg.loginRequired || cfg.auth.provider != "none";
+        message = "services.monkeytype.loginRequired needs an auth provider to sign in with";
+      }
     ];
+
+    services.monkeytype.settings.users = lib.mkIf cfg.loginRequired {
+      loginRequired = true;
+      signUp = lib.mkDefault true;
+    };
 
     services.mongodb = lib.mkIf cfg.database.createLocally {
       enable = true;
