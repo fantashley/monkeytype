@@ -95,6 +95,13 @@ jobs:
 
       - name: Check the pnpm dependency hash
         run: |
+          # the dependencies are named after the lockfile (see nix/package.nix),
+          # so if a cache has them they were already checked against the hash
+          plan=$(nix build .#pnpmDeps --dry-run 2>&1) || { echo "$plan"; exit 1; }
+          if ! grep -q -- '-pnpm-deps\.drv$' <<< "$plan"; then
+            echo "The pnpm dependencies for this lockfile are cached"
+            exit 0
+          fi
           if nix build .#pnpmDeps --no-link 2> build.log; then
             exit 0
           fi
