@@ -16,6 +16,21 @@ let
   nodejs = nodejs_24;
   pnpm = pnpm_11;
 
+  # the dependencies and the internal packages, without the backend and
+  # frontend sources, so that changes to those don't reinstall the workspace
+  workspaceSrc = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../package.json
+      ../pnpm-lock.yaml
+      ../pnpm-workspace.yaml
+      ../packages
+      ../backend/package.json
+      ../frontend/package.json
+      ../frontend/storybook/package.json
+    ];
+  };
+
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
@@ -31,50 +46,115 @@ let
 
   pnpmDeps = fetchPnpmDeps {
     pname = "monkeytype";
-    inherit version src pnpm;
+    inherit version pnpm;
+    src = workspaceSrc;
     fetcherVersion = 4;
     hash = "sha256-bGbH6G3Q3s04RteQsW0txJ33zKRBLSNTi9UV9Eo5/Qo=";
   };
 
-  # shared setup: install the workspace and build the internal packages
+  # the installed workspace with the internal packages built. Its inputs don't
+  # include the version or the backend and frontend sources, so it's only
+  # rebuilt when the dependencies or the internal packages change.
+  #
+  # out: the source tree with every node_modules and the built packages
+  # backendModules: the backend's production node_modules
+  workspace = stdenv.mkDerivation {
+    pname = "monkeytype-workspace";
+    version = "0";
+    src = workspaceSrc;
+    inherit pnpmDeps;
+
+    outputs = [
+      "out"
+      "backendModules"
+    ];
+
+    nativeBuildInputs = [
+      nodejs
+      pnpm
+      pnpmConfigHook
+      autoPatchelfHook
+      python3
+    ];
+
+    # prebuilt binaries of the build tools (rolldown, lightningcss, typescript, ...)
+    buildInputs = [ stdenv.cc.cc.lib ];
+
+    postConfigure = ''
+      autoPatchelf node_modules/.pnpm
+    '';
+
+    buildPhase = ''
+      runHook preBuild
+
+      pnpm --filter "./packages/*" --recursive run build
+
+      pnpm --offline --config.inject-workspace-packages=true deploy --filter @monkeytype/backend --prod deploy
+
+      # deploy builds bcrypt from source, the prebuilt download isn't available offline
+      test -f deploy/node_modules/bcrypt/lib/binding/napi-v3/bcrypt_lib.node
+
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir $backendModules
+      mv deploy/node_modules deploy/package.json $backendModules/
+      rm -r deploy
+      # the native modules built by deploy have $out/lib in their rpath, which
+      # would make the backend depend on the whole workspace
+      find $backendModules -name '*.node' -type f -exec patchelf --shrink-rpath {} \;
+      cp -r . $out
+
+      runHook postInstall
+    '';
+
+    # node_modules is used as installed, and has symlinks to packages that
+    # weren't installed for this platform
+    dontFixup = true;
+  };
+
+  # copies the workspace into the source tree to build the backend or frontend
   mkMonkeytype =
     args:
     stdenv.mkDerivation (
       {
-        inherit version src pnpmDeps;
+        inherit version src;
 
         nativeBuildInputs = [
           nodejs
           pnpm
-          pnpmConfigHook
-          autoPatchelfHook
-          python3
           makeWrapper
         ];
-
-        # prebuilt binaries of the build tools (rolldown, lightningcss, typescript, ...)
-        buildInputs = [ stdenv.cc.cc.lib ];
 
         env = {
           REDOCLY_TELEMETRY = "off";
           COMMIT_HASH = commitHash;
-        };
+          # the workspace's packageManager pins a different pnpm version
+          pnpm_config_pm_on_fail = "ignore";
+          # the copied workspace looks outdated to pnpm, it can't reinstall offline
+          pnpm_config_verify_deps_before_run = "false";
+        }
+        // args.env or { };
 
-        postConfigure = ''
-          autoPatchelf node_modules/.pnpm
-        '';
+        configurePhase = ''
+          runHook preConfigure
 
-        preBuild = ''
-          pnpm --filter "./packages/*" --recursive run build
+          cp -r ${workspace}/. .
+          chmod -R u+w .
+
+          runHook postConfigure
         '';
 
         dontStrip = true;
       }
-      // args
+      // removeAttrs args [ "env" ]
     );
 in
 {
-  inherit pnpmDeps;
+  inherit pnpmDeps workspace;
 
   backend = mkMonkeytype {
     pname = "monkeytype-backend";
@@ -90,13 +170,9 @@ in
     installPhase = ''
       runHook preInstall
 
-      pnpm --offline --config.inject-workspace-packages=true deploy --filter @monkeytype/backend --prod deploy
-
-      # deploy builds bcrypt from source, the prebuilt download isn't available offline
-      test -f deploy/node_modules/bcrypt/lib/binding/napi-v3/bcrypt_lib.node
-
       mkdir -p $out/lib/monkeytype-backend
-      cp -r deploy/node_modules deploy/package.json $out/lib/monkeytype-backend/
+      ln -s ${workspace.backendModules}/node_modules $out/lib/monkeytype-backend/node_modules
+      cp ${workspace.backendModules}/package.json $out/lib/monkeytype-backend/
       cp -r backend/dist backend/email-templates backend/redis-scripts $out/lib/monkeytype-backend/
       echo -n "${version}_${commitHash}" > $out/lib/monkeytype-backend/dist/server.version
 

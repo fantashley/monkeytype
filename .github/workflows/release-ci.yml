@@ -4,13 +4,21 @@
 # .github/workflows/sync-upstream.yml: their PRs are opened with the
 # GITHUB_TOKEN, which doesn't start workflows, so they're checked on push.
 # Upstream's Monkey CI only runs for master.
+#
+# Pushes to release only build the nix packages, to push them to the binary
+# cache before dotfiles' daily flake update deploys them.
+#
+# The nix builds use the Cachix cache named by the CACHIX_CACHE repository
+# variable, and push to it with the CACHIX_AUTH_TOKEN secret. Without the
+# variable they build without a cache, and without the token (PRs from other
+# repositories) they only pull from it.
 name: Release CI
 
 on:
   pull_request:
     branches: [release]
   push:
-    branches: ["sync/**"]
+    branches: [release, "sync/**"]
 
 permissions:
   contents: read
@@ -22,11 +30,14 @@ concurrency:
 jobs:
   check:
     # this repository's sync branches are checked on push, PRs from other
-    # repositories are checked like any other PR whatever their branch name
+    # repositories are checked like any other PR whatever their branch name.
+    # Pushes to release were checked in their PR.
     if: >-
-      github.event_name == 'push' ||
-      !startsWith(github.head_ref, 'sync/') ||
-      github.event.pull_request.head.repo.full_name != github.repository
+      github.event_name == 'push' && github.ref_name != 'release' ||
+      github.event_name == 'pull_request' && (
+        !startsWith(github.head_ref, 'sync/') ||
+        github.event.pull_request.head.repo.full_name != github.repository
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -73,6 +84,14 @@ jobs:
           persist-credentials: false
 
       - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_CACHE != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # the filtered sources are only used to build
+          pushFilter: "-source$"
 
       - name: Check the pnpm dependency hash
         run: |
