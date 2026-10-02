@@ -112,6 +112,8 @@ jobs:
           jq -r '[.[] | select(.baseRefName == "master" and (.isCrossRepository | not))] | sort_by(.number)
             | .[] | "- #\(.number) \(.title) (`\(.headRefName)`)"' <<< "$prs" > released.md
 
+          # actions/checkout leaves fork checked out, which can't be force updated
+          git checkout --quiet --detach
           for branch in "${branches[@]}" fork; do
             git branch -f "$branch" "origin/$branch"
           done
