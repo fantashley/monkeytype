@@ -104,12 +104,15 @@ export function LeaderboardPage(): JSXElement {
     enabled: isOpen(),
   }));
 
-  // the selection is remembered and starts at time 15, don't load all-time
-  // leaderboards until the sidebar switched it to a configured one
+  // the selection is remembered and starts at time 15, don't load leaderboards
+  // until the sidebar switched it to an enabled and configured one
   const isSelectionValid = (): boolean => {
     const selection = getSelection();
-    if (selection.type !== "allTime") return true;
     const config = serverConfigurationQuery.data;
+    if (selection.type === "weekly") {
+      return config?.leaderboards.weeklyXp.enabled === true;
+    }
+    if (selection.type !== "allTime") return true;
     return (
       config !== undefined &&
       isValidAllTimeSelection(selection, config.leaderboards.allTime.timeModes)
@@ -205,6 +208,9 @@ export function LeaderboardPage(): JSXElement {
                 }
                 connectionsEnabled={
                   serverConfigurationQueryData().connections.enabled
+                }
+                weeklyXpEnabled={
+                  serverConfigurationQueryData().leaderboards.weeklyXp.enabled
                 }
               />
             )}

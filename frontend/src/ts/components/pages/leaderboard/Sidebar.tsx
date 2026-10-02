@@ -26,6 +26,7 @@ export function Sidebar(props: {
   onSelect: (selection: Selection) => void;
   validModeRules: ValidModeRule[];
   connectionsEnabled: boolean;
+  weeklyXpEnabled: boolean;
 }): JSXElement {
   const updateSelection = (patch: Partial<Selection>) => {
     props.onSelect(
@@ -64,20 +65,19 @@ export function Sidebar(props: {
     }
   });
 
+  // the selection is remembered, leave the weekly leaderboard once it is disabled
+  createEffect(() => {
+    if (!props.weeklyXpEnabled && props.selection().type === "weekly") {
+      selectType("allTime");
+    }
+  });
+
   return (
     <>
       <Group
         selected={props.selection().type}
         onSelect={selectType}
-        items={[
-          {
-            id: "allTime",
-            text: "all-time english",
-            icon: "fa-globe-americas",
-          },
-          { id: "weekly", text: "weekly xp", icon: "fa-calendar-day" },
-          { id: "daily", text: "daily", icon: "fa-sun" },
-        ]}
+        items={getTypeButtons(props.weeklyXpEnabled)}
       />
       <Show when={isAuthenticated() && props.connectionsEnabled}>
         <Group
@@ -134,6 +134,20 @@ export function isValidAllTimeSelection(
     allTimeModes.includes(selection.mode2) &&
     selection.language === "english"
   );
+}
+
+/**
+ * the leaderboard types, without the ones disabled by the server configuration
+ */
+export function getTypeButtons(
+  weeklyXpEnabled: boolean,
+): GroupItem<Selection["type"]>[] {
+  const types: GroupItem<Selection["type"]>[] = [
+    { id: "allTime", text: "all-time english", icon: "fa-globe-americas" },
+    { id: "weekly", text: "weekly xp", icon: "fa-calendar-day" },
+    { id: "daily", text: "daily", icon: "fa-sun" },
+  ];
+  return types.filter((it) => it.id !== "weekly" || weeklyXpEnabled);
 }
 
 function Group<T>(props: {
