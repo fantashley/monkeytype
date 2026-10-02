@@ -19,6 +19,7 @@
     - [Setup email optional](#setup-email-optional)
   - [Account System with OpenID Connect](#account-system-with-openid-connect)
   - [Enable daily leaderboards](#enable-daily-leaderboards)
+  - [Require users to sign in](#require-users-to-sign-in)
   - [Configuration files](#configuration-files)
     - [env file](#env-file)
     - [serviceAccountKey.json](#serviceaccountkeyjson)
@@ -277,6 +278,24 @@ To enable daily leaderboards update the `backend-configuration.json` file and ad
 - language is one of the supported language
 - mode can be `time` or `words`
 - mode2 can be `15`,`30`,`60` or `120` if you picked `mode=time` or `10`,`25`,`50` or `100` if you picked `mode=words`.
+
+## Require users to sign in
+
+For a private instance you can make users sign in before they can use any part of the site, including the typing test. This needs the account system, see [Account System](#account-system). Update the `backend-configuration.json` file and add/modify
+
+```json
+{
+  "users": {
+    "signUp": true,
+    "loginRequired": true
+  }
+}
+```
+
+- signed out users are sent to the login page
+- the API requires authentication for everything except what is needed to sign in or sign up, e.g. leaderboards, public profiles and statistics are only available to signed in users
+- keep sign up enabled, otherwise the login page is disabled
+- anyone who can create an account can use the site
 
 ## Configuration files
 

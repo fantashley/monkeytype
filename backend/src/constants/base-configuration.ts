@@ -44,6 +44,7 @@ export const BASE_CONFIGURATION: Configuration = {
   },
   users: {
     signUp: false,
+    loginRequired: false,
     lastHashesCheck: {
       enabled: false,
       maxHashes: 0,
@@ -306,6 +307,10 @@ export const CONFIGURATION_FORM_SCHEMA: ObjectSchema<Configuration> = {
         signUp: {
           type: "boolean",
           label: "Sign Up Enabled",
+        },
+        loginRequired: {
+          type: "boolean",
+          label: "Login Required",
         },
         lastHashesCheck: {
           type: "object",

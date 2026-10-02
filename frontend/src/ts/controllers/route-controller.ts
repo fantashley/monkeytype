@@ -6,6 +6,13 @@ import { isFunboxActive } from "../test/funbox/list";
 import { showNoticeNotification } from "../states/notifications";
 import { navigationEvent, type NavigateOptions } from "../events/navigation";
 import { authEvent } from "../events/auth";
+import { queryClient } from "../queries";
+import { getServerConfigurationQueryOptions } from "../queries/server-configuration";
+import { tryCatch } from "@monkeytype/util/trycatch";
+import {
+  getLastKnownLoginRequired,
+  setLastKnownLoginRequired,
+} from "../states/login-required";
 import {
   isTestRestarting,
   isResultCalculating,
@@ -39,6 +46,35 @@ type Route = {
     navigateOptions: NavigateOptions,
   ) => Promise<void>;
 };
+
+/**
+ * true if the server only lets signed in users use the site.
+ * If the configuration can't be loaded, the last known setting is used. Until
+ * the setting is known, signed out users stay on the login page, which shows
+ * that the server is unavailable.
+ */
+async function isLoginRequired(): Promise<boolean> {
+  const options = getServerConfigurationQueryOptions();
+  const state = queryClient.getQueryState(options.queryKey);
+  let configuration = state?.data;
+  // the configuration is loaded once, don't wait for a failed request again on
+  // every page change
+  if (configuration === undefined && state?.status !== "error") {
+    const { data } = await tryCatch(queryClient.fetchQuery(options));
+    configuration = data ?? undefined;
+  }
+  if (configuration === undefined) return getLastKnownLoginRequired() ?? true;
+
+  setLastKnownLoginRequired(configuration.users.loginRequired);
+  return configuration.users.loginRequired;
+}
+
+/**
+ * true if the user has to sign in before they can use the site
+ */
+async function mustSignIn(): Promise<boolean> {
+  return !isAuthenticated() && (await isLoginRequired());
+}
 
 const route404: Route = {
   path: "404",
@@ -82,7 +118,8 @@ const routes: Route[] = [
   {
     path: "/login",
     load: async (_params, options) => {
-      if (!isAuthAvailable()) {
+      // there is nothing else to show when login is required
+      if (!isAuthAvailable() && !(await isLoginRequired())) {
         await navigate("/", options);
         return;
       }
@@ -174,7 +211,8 @@ export async function navigate(
   }
 
   const noQuit = isFunboxActive("no_quit");
-  if (isTestActive() && noQuit) {
+  // signed out users have to leave the test when login is required
+  if (isTestActive() && noQuit && !(await mustSignIn())) {
     showNoticeNotification(
       "No quit funbox is active. Please finish the test.",
       {
@@ -204,6 +242,11 @@ export async function navigate(
 }
 
 async function router(options = {} as NavigateOptions): Promise<void> {
+  if (location.pathname !== "/login" && (await mustSignIn())) {
+    await navigate("/login", options);
+    return;
+  }
+
   const matches = routes.map((r) => {
     return {
       route: r,
