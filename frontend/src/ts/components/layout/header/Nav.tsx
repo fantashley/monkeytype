@@ -16,7 +16,7 @@ import {
   prefetchLeaderboardPage,
 } from "../../../queries/prefetch";
 import { getServerConfigurationQueryOptions } from "../../../queries/server-configuration";
-import { getActivePage } from "../../../states/core";
+import { getActivePage, isAuthenticated } from "../../../states/core";
 import {
   getAccountButtonSpinner,
   getAnimatedLevel,
@@ -78,90 +78,97 @@ export function Nav(): JSXElement {
   const serverConfig = useQuery(() => getServerConfigurationQueryOptions());
   const showLoginButton = (): boolean =>
     serverConfig.data?.users.signUp ?? true;
+  // signed out users can only go to the login page when login is required
+  const showPageButtons = (): boolean =>
+    isAuthenticated() || !(serverConfig.data?.users.loginRequired ?? false);
 
   return (
     <nav class={cn("z-5 flex w-full items-center gap-1 md:gap-2")}>
-      <Button
-        variant="text"
-        fa={{
-          icon: "fa-keyboard",
-          fixedWidth: true,
-        }}
-        router-link
-        href="/"
-        class={buttonClass()}
-        dataset={{
-          "data-nav-item": "test",
-        }}
-        onClick={() => {
-          if (getActivePage() === "test") restartTestEvent.dispatch();
-        }}
-      />
-      <Button
-        variant="text"
-        fa={{
-          icon: "fa-crown",
-          fixedWidth: true,
-        }}
-        router-link
-        dataset={{
-          "data-nav-item": "leaderboards",
-        }}
-        class={buttonClass()}
-        href="/leaderboards"
-        onMouseEnter={() => {
-          prefetchLeaderboardPage();
-        }}
-      />
-      <Button
-        variant="text"
-        fa={{
-          icon: "fa-info",
-          fixedWidth: true,
-        }}
-        class={buttonClass()}
-        dataset={{
-          "data-nav-item": "about",
-        }}
-        href="/about"
-        router-link
-        onMouseEnter={() => {
-          prefetchAboutPage();
-        }}
-      />
-      <Button
-        variant="text"
-        fa={{
-          icon: "fa-cog",
-          fixedWidth: true,
-        }}
-        class={buttonClass()}
-        href="/settings"
-        dataset={{
-          "data-nav-item": "settings",
-        }}
-        router-link
-      />
-      <div class="grow"></div>
-      <Button
-        variant="text"
-        fa={{
-          icon: "fa-bell",
-          fixedWidth: true,
-        }}
-        dataset={{
-          "data-nav-item": "alerts",
-        }}
-        onClick={() => {
-          showModal("Alerts");
-        }}
-        class={cn(buttonClass(), "relative")}
-      >
-        <NotificationBubble
-          variant="fromCorner"
-          show={showAlertsNotificationBubble()}
+      <Show when={showPageButtons()}>
+        <Button
+          variant="text"
+          fa={{
+            icon: "fa-keyboard",
+            fixedWidth: true,
+          }}
+          router-link
+          href="/"
+          class={buttonClass()}
+          dataset={{
+            "data-nav-item": "test",
+          }}
+          onClick={() => {
+            if (getActivePage() === "test") restartTestEvent.dispatch();
+          }}
         />
-      </Button>
+        <Button
+          variant="text"
+          fa={{
+            icon: "fa-crown",
+            fixedWidth: true,
+          }}
+          router-link
+          dataset={{
+            "data-nav-item": "leaderboards",
+          }}
+          class={buttonClass()}
+          href="/leaderboards"
+          onMouseEnter={() => {
+            prefetchLeaderboardPage();
+          }}
+        />
+        <Button
+          variant="text"
+          fa={{
+            icon: "fa-info",
+            fixedWidth: true,
+          }}
+          class={buttonClass()}
+          dataset={{
+            "data-nav-item": "about",
+          }}
+          href="/about"
+          router-link
+          onMouseEnter={() => {
+            prefetchAboutPage();
+          }}
+        />
+        <Button
+          variant="text"
+          fa={{
+            icon: "fa-cog",
+            fixedWidth: true,
+          }}
+          class={buttonClass()}
+          href="/settings"
+          dataset={{
+            "data-nav-item": "settings",
+          }}
+          router-link
+        />
+      </Show>
+      <div class="grow"></div>
+      <Show when={showPageButtons()}>
+        <Button
+          variant="text"
+          fa={{
+            icon: "fa-bell",
+            fixedWidth: true,
+          }}
+          dataset={{
+            "data-nav-item": "alerts",
+          }}
+          onClick={() => {
+            showModal("Alerts");
+          }}
+          class={cn(buttonClass(), "relative")}
+        >
+          <NotificationBubble
+            variant="fromCorner"
+            show={showAlertsNotificationBubble()}
+          />
+        </Button>
+      </Show>
       <AnimePresence exitBeforeEnter>
         <Show
           when={getSnapshot()}

@@ -376,7 +376,10 @@ export const usersContract = c.router(
         200: CheckNameResponseSchema,
       },
       metadata: meta({
-        authenticationOptions: { isPublic: true },
+        authenticationOptions: {
+          isPublic: true,
+          isPublicWhenLoginRequired: true,
+        },
         rateLimit: "userCheckName",
       }),
     },
@@ -881,7 +884,10 @@ export const usersContract = c.router(
         200: MonkeyResponseSchema,
       },
       metadata: meta({
-        authenticationOptions: { isPublic: true },
+        authenticationOptions: {
+          isPublic: true,
+          isPublicWhenLoginRequired: true,
+        },
         rateLimit: "userForgotPasswordEmail",
       }),
     },

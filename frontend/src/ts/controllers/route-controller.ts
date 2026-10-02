@@ -6,6 +6,9 @@ import { isFunboxActive } from "../test/funbox/list";
 import { showNoticeNotification } from "../states/notifications";
 import { navigationEvent, type NavigateOptions } from "../events/navigation";
 import { authEvent } from "../events/auth";
+import { queryClient } from "../queries";
+import { getServerConfigurationQueryOptions } from "../queries/server-configuration";
+import { tryCatch } from "@monkeytype/util/trycatch";
 import {
   isTestRestarting,
   isResultCalculating,
@@ -39,6 +42,18 @@ type Route = {
     navigateOptions: NavigateOptions,
   ) => Promise<void>;
 };
+
+/**
+ * true if the server only lets signed in users use the site.
+ * The server enforces this, so if the configuration can't be fetched the site
+ * stays usable like it would without an account.
+ */
+async function isLoginRequired(): Promise<boolean> {
+  const { data } = await tryCatch(
+    queryClient.fetchQuery(getServerConfigurationQueryOptions()),
+  );
+  return data?.users.loginRequired ?? false;
+}
 
 const route404: Route = {
   path: "404",
@@ -82,7 +97,8 @@ const routes: Route[] = [
   {
     path: "/login",
     load: async (_params, options) => {
-      if (!isAuthAvailable()) {
+      // there is nothing else to show when login is required
+      if (!isAuthAvailable() && !(await isLoginRequired())) {
         await navigate("/", options);
         return;
       }
@@ -204,6 +220,15 @@ export async function navigate(
 }
 
 async function router(options = {} as NavigateOptions): Promise<void> {
+  if (
+    location.pathname !== "/login" &&
+    !isAuthenticated() &&
+    (await isLoginRequired())
+  ) {
+    await navigate("/login", options);
+    return;
+  }
+
   const matches = routes.map((r) => {
     return {
       route: r,

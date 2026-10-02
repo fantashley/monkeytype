@@ -49,6 +49,8 @@ export const ConfigurationSchema = z.object({
   }),
   users: z.object({
     signUp: z.boolean(),
+    /** users have to sign in to use any part of the site, e.g. for private instances */
+    loginRequired: z.boolean(),
     lastHashesCheck: z.object({
       enabled: z.boolean(),
       maxHashes: z.number().int().nonnegative(),

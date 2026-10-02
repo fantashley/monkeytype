@@ -57,8 +57,11 @@ export function authenticateTsRestRequest<
     let token: DecodedToken;
     let authType = "None";
 
+    // when users have to sign in, only endpoints needed to sign in stay public
+    const isLoginRequired = req.ctx.configuration.users.loginRequired;
     const isPublic =
-      options.isPublic === true ||
+      (options.isPublic === true &&
+        (!isLoginRequired || options.isPublicWhenLoginRequired === true)) ||
       (options.isPublicOnDev && isDevEnvironment());
 
     const {

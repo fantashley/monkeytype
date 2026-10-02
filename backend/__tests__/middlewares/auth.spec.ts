@@ -216,6 +216,68 @@ describe("middlewares/auth", () => {
       expect(prometheusIncrementAuthMock).toHaveBeenCalledWith("ApeKey");
       expect(prometheusRecordAuthTimeMock).toHaveBeenCalledOnce();
     });
+    describe("with login required", () => {
+      beforeEach(() => {
+        const ctx = mockRequest.ctx as Context;
+        mockRequest = {
+          ...mockRequest,
+          ctx: {
+            ...ctx,
+            configuration: {
+              ...ctx.configuration,
+              users: { ...ctx.configuration.users, loginRequired: true },
+            },
+          },
+        };
+      });
+
+      it("should fail without authentication on public endpoint", async () => {
+        await expect(async () =>
+          authenticate({ headers: {} }, { isPublic: true }),
+        ).rejects.toThrow("Unauthorized");
+      });
+      it("should allow the request with authentication on public endpoint", async () => {
+        //WHEN
+        const result = await authenticate({}, { isPublic: true });
+
+        //THEN
+        expect(result.decodedToken?.type).toBe("Bearer");
+        expect(result.decodedToken?.uid).toBe(mockDecodedToken.uid);
+        expect(nextFunction).toHaveBeenCalledTimes(1);
+      });
+      it("should allow the request with apeKey on public endpoint", async () => {
+        //WHEN
+        const result = await authenticate(
+          { headers: { authorization: "ApeKey aWQua2V5" } },
+          { isPublic: true },
+        );
+
+        //THEN
+        expect(result.decodedToken?.type).toBe("ApeKey");
+        expect(result.decodedToken?.uid).toBe("123");
+      });
+      it("should allow the request without authentication on endpoint needed to sign in", async () => {
+        //WHEN
+        const result = await authenticate(
+          { headers: {} },
+          { isPublic: true, isPublicWhenLoginRequired: true },
+        );
+
+        //THEN
+        expect(result.decodedToken?.type).toBe("None");
+        expect(nextFunction).toHaveBeenCalledTimes(1);
+      });
+      it("should allow the request without authentication on dev public endpoint", async () => {
+        //WHEN
+        const result = await authenticate(
+          { headers: {} },
+          { isPublicOnDev: true },
+        );
+
+        //THEN
+        expect(result.decodedToken?.type).toBe("None");
+      });
+    });
     it("should allow request with Uid on dev", async () => {
       //WHEN
       const result = await authenticate({

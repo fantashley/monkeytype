@@ -26,6 +26,7 @@ export const psasContract = c.router(
       openApiTags: "psas",
       authenticationOptions: {
         isPublic: true,
+        isPublicWhenLoginRequired: true,
       },
       rateLimit: "psaGet",
     }),

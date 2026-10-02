@@ -50,6 +50,7 @@ export const configurationContract = c.router(
       metadata: meta({
         authenticationOptions: {
           isPublic: true,
+          isPublicWhenLoginRequired: true,
         },
       }),
     },
