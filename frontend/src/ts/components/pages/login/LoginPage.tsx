@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/solid-query";
 import { JSXElement, Show } from "solid-js";
 
+import { isOidcAuth } from "../../../auth-provider";
 import { getServerConfigurationQueryOptions } from "../../../queries/server-configuration";
 import { getLoginPageInputsEnabled } from "../../../states/login";
 import { Page } from "../../common/Page";
 import { Login } from "./Login";
+import { OidcLogin } from "./OidcLogin";
 import { Register } from "./Register";
 
 export function LoginPage(): JSXElement {
@@ -23,8 +25,17 @@ export function LoginPage(): JSXElement {
         when={isSignUpDisabled()}
         fallback={
           <div class="flex h-full flex-col items-center justify-around gap-4 md:flex-row">
-            <Register />
-            <Login />
+            <Show
+              when={isOidcAuth()}
+              fallback={
+                <>
+                  <Register />
+                  <Login />
+                </>
+              }
+            >
+              <OidcLogin />
+            </Show>
           </div>
         }
       >

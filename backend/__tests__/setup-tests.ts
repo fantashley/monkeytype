@@ -4,6 +4,8 @@ import { setupCommonMocks } from "./setup-common-mocks";
 import { __testing } from "../src/init/configuration";
 
 process.env["MODE"] = "dev";
+// tests expect the default auth provider, ignore the one from a local .env file
+process.env["AUTH_PROVIDER"] = "firebase";
 process.env.TZ = "UTC";
 beforeAll(async () => {
   //don't add any configuration here, add to global-setup.ts instead.

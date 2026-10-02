@@ -7,7 +7,6 @@ import { MonkeyResponse } from "../../utils/monkey-response";
 import * as DiscordUtils from "../../utils/discord";
 import {
   buildAgentLog,
-  getFrontendUrl,
   omit,
   replaceObjectId,
   replaceObjectIds,
@@ -27,7 +26,6 @@ import { v4 as uuidv4 } from "uuid";
 import { ObjectId } from "mongodb";
 import * as ReportDAL from "../../dal/report";
 import emailQueue from "../../queues/email-queue";
-import FirebaseAdmin from "../../init/firebase-admin";
 import * as AuthUtil from "../../utils/auth";
 import * as Dates from "date-fns";
 import { UTCDateMini } from "@date-fns/utc";
@@ -146,23 +144,19 @@ export async function sendVerificationEmail(
   req: MonkeyRequest,
 ): Promise<MonkeyResponse> {
   const { email, uid } = req.ctx.decodedToken;
-  const isVerified = (
-    await FirebaseAdmin()
-      .auth()
-      .getUser(uid)
-      .catch((e: unknown) => {
-        throw new MonkeyError(
-          500, // this should never happen, but it does. it mightve been caused by auth token cache, will see if disabling cache fixes it
-          "Auth user not found, even though the token got decoded",
-          JSON.stringify({
-            uid,
-            email,
-            stack: e instanceof Error ? e.stack : JSON.stringify(e),
-          }),
-          uid,
-        );
-      })
-  ).emailVerified;
+  const isVerified = await AuthUtil.isEmailVerified(uid).catch((e: unknown) => {
+    if (e instanceof MonkeyError) throw e;
+    throw new MonkeyError(
+      500, // this should never happen, but it does. it mightve been caused by auth token cache, will see if disabling cache fixes it
+      "Auth user not found, even though the token got decoded",
+      JSON.stringify({
+        uid,
+        email,
+        stack: e instanceof Error ? e.stack : JSON.stringify(e),
+      }),
+      uid,
+    );
+  });
   if (isVerified) {
     throw new MonkeyError(400, "Email already verified");
   }
@@ -181,9 +175,7 @@ export async function sendVerificationEmail(
   }
 
   const { data: link, error } = await tryCatch(
-    FirebaseAdmin()
-      .auth()
-      .generateEmailVerificationLink(email, { url: getFrontendUrl() }),
+    AuthUtil.generateEmailVerificationLink(email),
   );
 
   if (error) {
@@ -493,7 +485,14 @@ export async function getUser(req: MonkeyRequest): Promise<GetUserResponse> {
   );
 
   if (error) {
-    if (error instanceof MonkeyError && error.status === 404) {
+    if (
+      error instanceof MonkeyError &&
+      error.status === 404 &&
+      !AuthUtil.isAuthUserManagedByBackend()
+    ) {
+      //the account is managed by an external identity provider, the user needs to sign up
+      throw new MonkeyError(404, "User not found", "get user", uid);
+    } else if (error instanceof MonkeyError && error.status === 404) {
       //if the user is in the auth system but not in the db, its possible that the user was created by bypassing captcha
       //since there is no data in the database anyway, we can just delete the user from the auth system
       //and ask them to sign up again

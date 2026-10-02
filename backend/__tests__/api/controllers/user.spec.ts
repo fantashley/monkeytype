@@ -448,6 +448,46 @@ describe("user controller test", () => {
       );
     });
   });
+  describe("with the oidc auth provider", () => {
+    beforeEach(() => {
+      vi.stubEnv("AUTH_PROVIDER", "oidc");
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("should not send verification email", async () => {
+      //WHEN
+      const { body } = await mockApp
+        .get("/users/verificationEmail")
+        .set("Authorization", `Bearer ${uid}`)
+        .expect(400);
+
+      //THEN
+      expect(body.message).toEqual(
+        "This action is not supported by the configured authentication provider (oidc)",
+      );
+    });
+
+    it("should return 404 without deleting the auth user if the user does not exist", async () => {
+      //GIVEN
+      vi.spyOn(UserDal, "getUser").mockRejectedValueOnce(
+        new MonkeyError(404, "User not found"),
+      );
+      const deleteUserMock = vi.spyOn(AuthUtils, "deleteUser");
+
+      //WHEN
+      const { body } = await mockApp
+        .get("/users")
+        .set("Authorization", `Bearer ${uid}`)
+        .expect(404);
+
+      //THEN
+      expect(body.message).toEqual("User not found\nStack: get user");
+      expect(deleteUserMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("sendForgotPasswordEmail", () => {
     const sendForgotPasswordEmailMock = vi.spyOn(
       AuthUtils,

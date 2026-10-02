@@ -24,6 +24,7 @@ import * as Result from "./result";
 import {
   getActivePage,
   getCustomTextIndicator,
+  getUserId,
   isAuthenticated,
 } from "../states/core";
 import {
@@ -68,7 +69,6 @@ import { configEvent } from "../events/config";
 import { timerEvent } from "../events/timer";
 import objectHash from "object-hash";
 import * as AnalyticsController from "../controllers/analytics-controller";
-import { getAuthenticatedUser } from "../firebase";
 import { highlight } from "../events/keymap";
 import * as LazyModeState from "../legacy-states/remember-lazy-mode";
 import Format from "../singletons/format";
@@ -1040,8 +1040,8 @@ export async function finish(difficultyFailed = false): Promise<void> {
 
   let savingResultPromise: ReturnType<typeof saveResult> =
     Promise.resolve(null);
-  const user = getAuthenticatedUser();
-  if (user !== null) {
+  const uid = getUserId();
+  if (uid !== null) {
     // logged in
     if (dontSave) {
       void AnalyticsController.log("testCompletedInvalid");
@@ -1053,7 +1053,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
         if (challenge !== null) completedEvent.challenge = challenge;
       }
 
-      completedEvent.uid = user.uid;
+      completedEvent.uid = uid;
 
       savingResultPromise = saveResult(completedEvent, false);
       void savingResultPromise.then((response) => {
