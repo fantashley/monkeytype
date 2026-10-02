@@ -1,0 +1,164 @@
+# Fork only: keeps the stack of PRs on top of the latest upstream release.
+#
+# When monkeytypegame/monkeytype publishes a release that isn't in this fork's
+# master yet, this:
+#   1. rebases every branch of the stack (open PRs chained from master up to
+#      release) onto the release tag in one pass,
+#   2. refreshes the pnpm dependency hash in nix/package.nix,
+#   3. runs lint, unit tests and the nix builds on release,
+#   4. force pushes master (set to the release tag) and all stack branches.
+# On a rebase conflict or a failed check nothing is pushed and the run fails.
+#
+# dotfiles picks up the new release branch in its daily flake update.
+#
+# Pushes use the SYNC_DEPLOY_KEY deploy key (write access): the GITHUB_TOKEN
+# can't push commits that change workflow files, which upstream releases do.
+name: Sync upstream release
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Upstream ref to sync to instead of the latest release (e.g. a tag or master)
+        required: false
+      dry_run:
+        description: Rebase and run the checks, but don't push
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: sync-upstream
+
+env:
+  UPSTREAM: monkeytypegame/monkeytype
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+          ssh-key: ${{ secrets.SYNC_DEPLOY_KEY }}
+
+      - name: Find the upstream release
+        id: target
+        run: |
+          ref="${{ inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          fi
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --no-tags upstream "$ref"
+          commit=$(git rev-parse "FETCH_HEAD^{commit}")
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$commit" origin/master; then
+            echo "Upstream $ref is already in master" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Syncing to upstream $ref ($commit)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Rebase the stack
+        if: steps.target.outputs.skip != 'true'
+        id: rebase
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The stack is the chain of open PRs from master up to release.
+          prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json headRefName,baseRefName)
+          branches=()
+          base=master
+          while head=$(jq -r --arg base "$base" \
+              '[.[] | select(.baseRefName == $base)] | if length == 1 then .[0].headRefName else empty end' \
+              <<< "$prs") && [ -n "$head" ]; do
+            branches+=("$head")
+            base=$head
+          done
+          if [ "${branches[-1]:-}" != release ]; then
+            echo "::error::Couldn't follow the PR chain from master to release, found: ${branches[*]:-none}"
+            exit 1
+          fi
+          echo "Stack: master ← ${branches[*]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "branches=${branches[*]}" >> "$GITHUB_OUTPUT"
+
+          for branch in "${branches[@]}"; do
+            git branch -f "$branch" "origin/$branch"
+          done
+          git switch release
+          if ! git rebase --update-refs --onto "${{ steps.target.outputs.commit }}" origin/master release; then
+            git status --short | tee -a "$GITHUB_STEP_SUMMARY"
+            git rebase --abort
+            echo "::error::Rebasing the stack onto ${{ steps.target.outputs.ref }} conflicts, resolve it locally"
+            exit 1
+          fi
+
+      - uses: cachix/install-nix-action@v31
+        if: steps.target.outputs.skip != 'true'
+
+      - name: Update the pnpm dependency hash
+        if: steps.target.outputs.skip != 'true'
+        run: |
+          if nix build .#pnpmDeps --no-link 2> build.log; then
+            echo "pnpm dependency hash is up to date"
+            exit 0
+          fi
+          hash=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | awk '{print $2}')
+          if [ -z "$hash" ]; then
+            cat build.log
+            echo "::error::Building the pnpm dependencies failed"
+            exit 1
+          fi
+          sed -i -E "s|hash = \"sha256-[A-Za-z0-9+/=]+\";|hash = \"$hash\";|" nix/package.nix
+          nix build .#pnpmDeps --no-link
+          git commit -am "build(nix): update pnpm dependency hash for ${{ steps.target.outputs.ref }}"
+          echo "Updated the pnpm dependency hash" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.target.outputs.skip != 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.target.outputs.skip != 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Lint and test
+        if: steps.target.outputs.skip != 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "./packages/*" --recursive run build
+          cp frontend/src/ts/constants/firebase-config-example.ts frontend/src/ts/constants/firebase-config.ts
+          pnpm --filter @monkeytype/backend run lint
+          pnpm --filter @monkeytype/backend run test
+          pnpm --filter @monkeytype/frontend run lint
+          pnpm --filter @monkeytype/frontend run madge
+          pnpm --filter @monkeytype/frontend run test
+          rm frontend/src/ts/constants/firebase-config.ts
+
+      - name: Build the nix packages
+        if: steps.target.outputs.skip != 'true'
+        run: nix build .#backend .#frontend -L
+
+      - name: Push
+        if: steps.target.outputs.skip != 'true' && !inputs.dry_run
+        run: |
+          read -ra branches <<< "${{ steps.rebase.outputs.branches }}"
+          args=("--force-with-lease=master:origin/master" "${{ steps.target.outputs.commit }}:refs/heads/master")
+          for branch in "${branches[@]}"; do
+            args+=("--force-with-lease=$branch:origin/$branch" "$branch:$branch")
+          done
+          git push --atomic origin "${args[@]}"
+          echo "Pushed master and ${branches[*]}" | tee -a "$GITHUB_STEP_SUMMARY"
