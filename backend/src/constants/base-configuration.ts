@@ -97,6 +97,10 @@ export const BASE_CONFIGURATION: Configuration = {
   },
   leaderboards: {
     minTimeTyping: 2 * 60 * 60,
+    allTime: {
+      timeModes: ["15", "60"],
+      updateOnResult: false,
+    },
     weeklyXp: {
       enabled: false,
       expirationTimeInDays: 0, // This should atleast be 15
@@ -555,6 +559,26 @@ export const CONFIGURATION_FORM_SCHEMA: ObjectSchema<Configuration> = {
           label: "Minimum typing time the user needs to get on a leaderboard",
           hint: "Typing time in seconds. Change is only applied after restarting the server.",
           min: 0,
+        },
+        allTime: {
+          type: "object",
+          label: "All-Time",
+          fields: {
+            timeModes: {
+              type: "array",
+              label: "Time Modes",
+              hint: "English time modes with a leaderboard: 15, 30, 60 or 120. Results before a mode was added only count once the user beats them. Change is only applied after restarting the server.",
+              items: {
+                type: "string",
+                label: "Time Mode",
+              },
+            },
+            updateOnResult: {
+              type: "boolean",
+              label: "Update on result",
+              hint: "Update the leaderboards right after a result changes them, instead of only every 15 minutes. Every update ranks all users, only enable this on small instances.",
+            },
+          },
         },
         weeklyXp: {
           type: "object",

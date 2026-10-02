@@ -39,7 +39,7 @@ export async function createTestData(
 
   await createTestResults(user, req.body);
   await updateUser(uid);
-  await updateLeaderboard();
+  await updateLeaderboard(req.ctx.configuration.leaderboards.allTime.timeModes);
 
   return new MonkeyResponse("test data created", { uid, email });
 }
@@ -303,9 +303,10 @@ async function updateUser(uid: string): Promise<void> {
   );
 }
 
-async function updateLeaderboard(): Promise<void> {
-  await LeaderboardDal.update("time", "15", "english");
-  await LeaderboardDal.update("time", "60", "english");
+async function updateLeaderboard(timeModes: string[]): Promise<void> {
+  for (const mode2 of timeModes) {
+    await LeaderboardDal.update("time", mode2, "english");
+  }
 }
 
 function randomValue<T>(values: T[]): T {

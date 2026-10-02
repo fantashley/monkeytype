@@ -42,14 +42,21 @@ export function LeaderboardPage(): JSXElement {
 
   const [scrollToUser, setScrollToUser] = createSignal(false);
 
-  //invalidate cache for daily and weekly lb on close
+  //invalidate cache for daily and weekly lb on close, and all-time lb if it updates after every test
   createEffectOn(isOpen, (open) => {
     if (!open) {
+      const types = ["weekly", "daily"];
+      if (
+        queryClient.getQueryData(getServerConfigurationQueryOptions().queryKey)
+          ?.leaderboards.allTime.updateOnResult === true
+      ) {
+        types.push("allTime");
+      }
       void queryClient.invalidateQueries({
         predicate: (query) =>
           query.queryKey.length >= 3 &&
           query.queryKey[1] === "leaderboard" &&
-          ["weekly", "daily"].includes(query.queryKey[2] as string),
+          types.includes(query.queryKey[2] as string),
       });
     }
   });
@@ -176,6 +183,9 @@ export function LeaderboardPage(): JSXElement {
             {({ serverConfigurationQueryData }) => (
               <Sidebar
                 selection={getSelection}
+                allTimeModes={
+                  serverConfigurationQueryData().leaderboards.allTime.timeModes
+                }
                 onSelect={onSelectionChange}
                 validModeRules={
                   serverConfigurationQueryData().dailyLeaderboards
@@ -259,7 +269,13 @@ export function LeaderboardPage(): JSXElement {
                     "mb-2 grid grid-cols-1 items-center justify-between gap-2 text-sm sm:grid-cols-2 sm:text-base",
                   )}
                 >
-                  <NextUpdate type={getSelection().type} />
+                  <NextUpdate
+                    type={getSelection().type}
+                    updateOnResult={
+                      serverConfigurationQuery.data?.leaderboards.allTime
+                        .updateOnResult ?? false
+                    }
+                  />
                   <Navigation
                     isLoading={
                       entriesQuery.isLoading ||

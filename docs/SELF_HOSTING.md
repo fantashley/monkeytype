@@ -22,6 +22,7 @@
     - [env file](#env-file)
     - [serviceAccountKey.json](#serviceaccountkeyjson)
     - [backend-configuration.json](#backend-configurationjson)
+  - [Configure all-time leaderboards](#configure-all-time-leaderboards)
 
 <!-- /TOC -->
 
@@ -253,3 +254,21 @@ Configuration of the backend. Check the [default configuration](https://github.c
 
 > [!NOTE]
 > Configuration changes are applied only on container startup. You must restart the container for your updates to take effect.
+
+## Configure all-time leaderboards
+
+All-time leaderboards rank the english time `15` and `60` personal bests of all users and are updated every 15 minutes. To change the time modes or update them right after a result, update the `backend-configuration.json` file and add/modify
+
+```json
+{
+  "leaderboards": {
+    "allTime": {
+      "timeModes": ["15", "30", "60"],
+      "updateOnResult": true
+    }
+  }
+}
+```
+
+- timeModes can contain `15`, `30`, `60` and `120`. Results set before a time mode was added only count once the user beats them.
+- updateOnResult updates a leaderboard after every personal best for it. Every update ranks all users, only enable it on small instances.

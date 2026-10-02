@@ -23,6 +23,7 @@ import {
   incrementDailyLeaderboard,
 } from "../../utils/prometheus";
 import GeorgeQueue from "../../queues/george-queue";
+import { updateLeaderboard as updateAllTimeLeaderboard } from "../../jobs/update-leaderboards";
 import {
   getDailyLeaderboard,
   purgeUserFromDailyLeaderboards,
@@ -460,7 +461,12 @@ export async function addResult(
 
   if (!completedEvent.bailedOut) {
     [isPb, tagPbs] = await Promise.all([
-      UserDAL.checkIfPb(uid, user, completedEvent),
+      UserDAL.checkIfPb(
+        uid,
+        user,
+        completedEvent,
+        req.ctx.configuration.leaderboards.allTime.timeModes,
+      ),
       UserDAL.checkIfTagPb(uid, user, completedEvent),
     ]);
   }
@@ -677,6 +683,22 @@ export async function addResult(
       }% (${addedResult.insertedId})`,
       uid,
     );
+  }
+
+  const allTimeConfig = req.ctx.configuration.leaderboards.allTime;
+  if (
+    allTimeConfig.updateOnResult &&
+    isPb &&
+    completedEvent.mode === "time" &&
+    allTimeConfig.timeModes.some((it) => it === completedEvent.mode2) &&
+    completedEvent.language === "english" &&
+    !completedEvent.lazyMode
+  ) {
+    void updateAllTimeLeaderboard(completedEvent.mode2).catch((e: unknown) => {
+      Logger.error(
+        `Failed to update the time ${completedEvent.mode2} leaderboard: ${e}`,
+      );
+    });
   }
 
   const data: PostResultResponse = {

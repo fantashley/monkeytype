@@ -56,14 +56,54 @@ async function updateLeaderboardAndNotifyChanges(
   }
 }
 
+const runningUpdates = new Map<string, Promise<void>>();
+const queuedUpdates = new Map<string, Promise<void>>();
+
+/**
+ * Updates the all-time leaderboard of a time mode. Only one update runs at a
+ * time per leaderboard, requests during an update share the next one.
+ */
+export async function updateLeaderboard(
+  leaderboardTime: string,
+): Promise<void> {
+  const queued = queuedUpdates.get(leaderboardTime);
+  if (queued !== undefined) return queued;
+
+  const update = updateAfter(
+    leaderboardTime,
+    runningUpdates.get(leaderboardTime),
+  );
+  queuedUpdates.set(leaderboardTime, update);
+  return update;
+}
+
+async function updateAfter(
+  leaderboardTime: string,
+  previous: Promise<void> | undefined,
+): Promise<void> {
+  await previous?.catch(() => undefined);
+  queuedUpdates.delete(leaderboardTime);
+
+  const running = updateLeaderboardAndNotifyChanges(leaderboardTime);
+  runningUpdates.set(leaderboardTime, running);
+  try {
+    await running;
+  } finally {
+    if (runningUpdates.get(leaderboardTime) === running) {
+      runningUpdates.delete(leaderboardTime);
+    }
+  }
+}
+
 async function updateLeaderboards(): Promise<void> {
-  const { maintenance } = await getCachedConfiguration();
+  const { maintenance, leaderboards } = await getCachedConfiguration();
   if (maintenance) {
     return;
   }
 
-  await updateLeaderboardAndNotifyChanges("60");
-  await updateLeaderboardAndNotifyChanges("15");
+  for (const leaderboardTime of leaderboards.allTime.timeModes) {
+    await updateLeaderboard(leaderboardTime);
+  }
 }
 
 export default new CronJob(CRON_SCHEDULE, updateLeaderboards);

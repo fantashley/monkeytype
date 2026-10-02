@@ -22,6 +22,7 @@ export type ModeSelect = Pick<Selection, "mode" | "mode2">;
 
 export function Sidebar(props: {
   selection: Accessor<Selection>;
+  allTimeModes: string[];
   onSelect: (selection: Selection) => void;
   validModeRules: ValidModeRule[];
   connectionsEnabled: boolean;
@@ -30,7 +31,7 @@ export function Sidebar(props: {
     props.onSelect(
       normalizeSelection(
         { ...props.selection(), ...patch } as Selection,
-        getValidLeaderboards(props.validModeRules),
+        getValidLeaderboards(props.allTimeModes, props.validModeRules),
       ),
     );
   };
@@ -84,7 +85,9 @@ export function Sidebar(props: {
           }}
           onSelect={selectMode}
           items={getModeButtons(
-            getValidLeaderboards(props.validModeRules)[props.selection().type],
+            getValidLeaderboards(props.allTimeModes, props.validModeRules)[
+              props.selection().type
+            ],
             props.selection().language,
           )}
         />
@@ -94,7 +97,8 @@ export function Sidebar(props: {
           selected={props.selection().language}
           onSelect={selectLanguage}
           items={getLanguageButtons(
-            getValidLeaderboards(props.validModeRules).daily,
+            getValidLeaderboards(props.allTimeModes, props.validModeRules)
+              .daily,
             props.selection().mode,
             props.selection().mode2,
           )}
@@ -214,6 +218,7 @@ function getLanguageButtons(
   }));
 }
 function getValidLeaderboards(
+  allTimeModes: string[],
   validModeRules: ValidModeRule[],
 ): ValidLeaderboards {
   //a rule can contain multiple values. create a flat list out of them
@@ -230,10 +235,9 @@ function getValidLeaderboards(
 
   return {
     allTime: {
-      time: {
-        "15": ["english"],
-        "60": ["english"],
-      },
+      time: Object.fromEntries(
+        allTimeModes.map((mode2) => [mode2, ["english"] as Language[]]),
+      ),
     },
     weekly: {},
     daily: dailyRules.reduce<
