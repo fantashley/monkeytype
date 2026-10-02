@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getLatestReleaseFromGitHub } from "./json-data";
 import { LocalStorageWithSchema } from "./local-storage-with-schema";
 import { tryCatch } from "@monkeytype/util/trycatch";
-import { isDevEnvironment } from "./env";
+import { isDevEnvironment, isSelfHosted } from "./env";
 import { createErrorMessage } from "./error";
 
 const memoryLS = new LocalStorageWithSchema({
@@ -22,7 +22,8 @@ export async function fetchLatestVersion(): Promise<{
   text: string;
   isNew: boolean;
 } | null> {
-  if (isDevEnvironment()) return null;
+  // self hosted instances don't follow the monkeytype releases
+  if (isDevEnvironment() || isSelfHosted()) return null;
 
   const { data: currentVersion, error } = await tryCatch(
     getLatestReleaseFromGitHub(),

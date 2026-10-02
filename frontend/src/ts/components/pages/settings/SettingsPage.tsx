@@ -14,6 +14,7 @@ import { showModal } from "../../../states/modals";
 import { isSettingsSearchActive } from "../../../states/settings-search";
 import { showSimpleModal } from "../../../states/simple-modal";
 import { cn } from "../../../utils/cn";
+import { isSelfHosted } from "../../../utils/env";
 import fileStorage from "../../../utils/file-storage";
 import { wordsToCamelCase } from "../../../utils/strings";
 import { Anime, AnimeShow } from "../../common/anime";
@@ -189,28 +190,32 @@ export function SettingsPage(): JSXElement {
             <SearchableAutoSetting key="showOutOfFocusWarning" />
             <SearchableAutoSetting key="capsLockWarning" />
             <SearchableAutoSetting key="showAverage" />
-            <SearchableAutoSetting key="ads" />
+            <Show when={!isSelfHosted()}>
+              <SearchableAutoSetting key="ads" />
+            </Show>
           </Section>
           <Section title="danger zone">
             <ImportExport />
-            <SearchableSetting
-              key="cookies"
-              title="update cookie preferences"
-              description="If you changed your mind about which cookies you consent to, you can change your preferences here."
-              fa={{
-                icon: "fa-cookie-bite",
-              }}
-              inputs={
-                <Button
-                  class="w-full"
-                  onClick={() => {
-                    showModal("Cookies");
-                  }}
-                >
-                  open
-                </Button>
-              }
-            />
+            <Show when={!isSelfHosted()}>
+              <SearchableSetting
+                key="cookies"
+                title="update cookie preferences"
+                description="If you changed your mind about which cookies you consent to, you can change your preferences here."
+                fa={{
+                  icon: "fa-cookie-bite",
+                }}
+                inputs={
+                  <Button
+                    class="w-full"
+                    onClick={() => {
+                      showModal("Cookies");
+                    }}
+                  >
+                    open
+                  </Button>
+                }
+              />
+            </Show>
             <SearchableSetting
               key="theRest"
               title="the rest"
