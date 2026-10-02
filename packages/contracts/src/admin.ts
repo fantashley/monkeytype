@@ -1,6 +1,6 @@
 import { initContract } from "@ts-rest/core";
 import { z } from "zod";
-import { IdSchema } from "@monkeytype/schemas/util";
+import { UserIdSchema } from "@monkeytype/schemas/util";
 import {
   CommonResponses,
   meta,
@@ -10,14 +10,14 @@ import {
 
 export const ToggleBanRequestSchema = z
   .object({
-    uid: IdSchema,
+    uid: UserIdSchema,
   })
   .strict();
 export type ToggleBanRequest = z.infer<typeof ToggleBanRequestSchema>;
 
 export const ClearStreakHourOffsetRequestSchema = z
   .object({
-    uid: IdSchema,
+    uid: UserIdSchema,
   })
   .strict();
 export type ClearStreakHourOffsetRequest = z.infer<
@@ -33,7 +33,7 @@ export type ToggleBanResponse = z.infer<typeof ToggleBanResponseSchema>;
 
 export const DeleteUserRequestSchema = z
   .object({
-    uid: IdSchema,
+    uid: UserIdSchema,
   })
   .strict();
 export type DeleteUserRequest = z.infer<typeof DeleteUserRequestSchema>;

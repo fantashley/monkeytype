@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { IdSchema } from "./util";
+import { IdSchema, UserIdSchema } from "./util";
 
 export const ConnectionStatusSchema = z.enum([
   "pending",
@@ -13,9 +13,9 @@ export type ConnectionType = z.infer<typeof ConnectionTypeSchema>;
 
 export const ConnectionSchema = z.object({
   _id: IdSchema,
-  initiatorUid: IdSchema,
+  initiatorUid: UserIdSchema,
   initiatorName: z.string(),
-  receiverUid: IdSchema,
+  receiverUid: UserIdSchema,
   receiverName: z.string(),
   lastModified: z.number().int().nonnegative(),
   status: ConnectionStatusSchema,

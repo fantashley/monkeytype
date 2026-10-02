@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nameWithSeparators, slug } from "../src/util";
+import { nameWithSeparators, slug, UserIdSchema } from "../src/util";
 
 describe("Schema Validation Tests", () => {
   describe("nameWithSeparators", () => {
@@ -51,6 +51,27 @@ describe("Schema Validation Tests", () => {
       expect(schema.safeParse(",invalid").success).toBe(false);
       expect(schema.safeParse("invalid space").success).toBe(false);
       expect(schema.safeParse("invalid#hash").success).toBe(false);
+    });
+  });
+
+  describe("UserIdSchema", () => {
+    it("accepts user ids of different auth providers", () => {
+      // firebase
+      expect(
+        UserIdSchema.safeParse("qJ3bXyZ9aB1cD2eF3gH4iJ5kL6m2").success,
+      ).toBe(true);
+      // OpenID Connect subject, e.g. a uuid
+      expect(
+        UserIdSchema.safeParse("1c7dfe98-95b5-4e37-9c90-57c71660a655").success,
+      ).toBe(true);
+      expect(
+        UserIdSchema.safeParse("auth0|5f7c8ec7c33c6c004bbafe82").success,
+      ).toBe(true);
+    });
+
+    it("rejects empty and too long user ids", () => {
+      expect(UserIdSchema.safeParse("").success).toBe(false);
+      expect(UserIdSchema.safeParse("a".repeat(256)).success).toBe(false);
     });
   });
 });

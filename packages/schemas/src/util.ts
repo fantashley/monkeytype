@@ -34,6 +34,13 @@ export const nameWithSeparators = (): ZodString =>
 export const IdSchema = token();
 export type Id = z.infer<typeof IdSchema>;
 
+/**
+ * user ids are defined by the auth provider, e.g. firebase or an OpenID Connect
+ * provider, and can contain any characters
+ */
+export const UserIdSchema = z.string().min(1).max(255);
+export type UserId = z.infer<typeof UserIdSchema>;
+
 export const TagSchema = token().max(50);
 export type Tag = z.infer<typeof TagSchema>;
 

@@ -5,6 +5,7 @@ import {
   IdSchema,
   PercentageSchema,
   token,
+  UserIdSchema,
   WpmSchema,
 } from "./util";
 import { LanguageSchema } from "./languages";
@@ -80,7 +81,7 @@ const ResultBaseSchema = z.object({
   consistency: PercentageSchema,
   keyConsistency: PercentageSchema,
   chartData: ChartDataSchema.or(z.literal("toolong")),
-  uid: IdSchema,
+  uid: UserIdSchema,
 
   //required on POST but optional in the database and might be removed to save space
   restartCount: z.number().int().nonnegative().optional(),
