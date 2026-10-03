@@ -5,6 +5,7 @@ import { getUserId, setUserId, setUserVerified } from "./states/core";
 import { promiseWithResolvers } from "./utils/misc";
 import type { AuthUser } from "./types/auth";
 import { createUserManager } from "./oidc-user-manager";
+import { showErrorNotification } from "./states/notifications";
 
 type ReadyCallback = (success: boolean, user: AuthUser | null) => Promise<void>;
 
@@ -128,6 +129,13 @@ async function renewToken(): Promise<User | null> {
     .catch((e: unknown) => {
       console.error("Failed to renew OIDC token", e);
       return null;
+    })
+    .then((user) => {
+      // inside the shared promise, so concurrent callers notify only once
+      if (user === null) {
+        showErrorNotification("Your session expired, please sign in again");
+      }
+      return user;
     })
     .finally(() => {
       renewPromise = undefined;
