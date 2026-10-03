@@ -3,6 +3,7 @@ import type { User } from "oidc-client-ts";
 
 import * as Oidc from "../../src/ts/oidc";
 import { getUserId, isUserVerified } from "../../src/ts/states/core";
+import { showErrorNotification } from "../../src/ts/states/notifications";
 
 vi.mock("virtual:env-config", () => ({
   envConfig: {
@@ -26,6 +27,10 @@ const manager = vi.hoisted(() => ({
   signinSilent: vi.fn(),
   signinPopup: vi.fn(),
   events: { addUserSignedOut: vi.fn() },
+}));
+
+vi.mock("../../src/ts/states/notifications", () => ({
+  showErrorNotification: vi.fn(),
 }));
 
 vi.mock("../../src/ts/oidc-user-manager", () => ({
@@ -89,6 +94,17 @@ describe("oidc", () => {
 
       expect(manager.removeUser).toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith(true, null);
+      expect(showErrorNotification).toHaveBeenCalledWith(
+        "Your session expired, please sign in again",
+      );
+    });
+
+    it("does not notify when there is no stored user", async () => {
+      manager.getUser.mockResolvedValue(null);
+
+      await Oidc.init(callback);
+
+      expect(showErrorNotification).not.toHaveBeenCalled();
     });
   });
 
@@ -120,6 +136,9 @@ describe("oidc", () => {
       expect(manager.removeUser).toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith(true, null);
       expect(getUserId()).toBeNull();
+      expect(showErrorNotification).toHaveBeenCalledWith(
+        "Your session expired, please sign in again",
+      );
     });
   });
 
@@ -221,5 +240,6 @@ describe("oidc", () => {
     expect(manager.removeUser).toHaveBeenCalled();
     expect(callback).toHaveBeenCalledWith(true, null);
     expect(getUserId()).toBeNull();
+    expect(showErrorNotification).not.toHaveBeenCalled();
   });
 });

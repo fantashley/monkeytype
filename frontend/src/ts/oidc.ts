@@ -5,6 +5,7 @@ import { getUserId, setUserId, setUserVerified } from "./states/core";
 import { promiseWithResolvers } from "./utils/misc";
 import type { AuthUser } from "./types/auth";
 import { createUserManager } from "./oidc-user-manager";
+import { showErrorNotification } from "./states/notifications";
 
 type ReadyCallback = (success: boolean, user: AuthUser | null) => Promise<void>;
 
@@ -80,7 +81,10 @@ export async function init(callback: ReadyCallback): Promise<void> {
     let user = await manager.getUser();
     if (user?.expired === true) {
       user = await renewToken();
-      if (user === null) await manager.removeUser();
+      if (user === null) {
+        await manager.removeUser();
+        notifySessionExpired();
+      }
     }
 
     const authUser = toAuthUser(user);
@@ -108,6 +112,10 @@ export function isAuthAvailable(): boolean {
 export async function signIn(): Promise<void> {
   if (manager === undefined) throw new Error("Authentication uninitialized");
   await manager.signinRedirect({ prompt: "login" });
+}
+
+function notifySessionExpired(): void {
+  showErrorNotification("Your session expired, please sign in again");
 }
 
 async function clearUser(): Promise<void> {
@@ -155,6 +163,7 @@ export async function getIdToken(): Promise<string | null> {
     user = await renewToken();
     if (user === null) {
       await clearUser();
+      notifySessionExpired();
       return null;
     }
     if (isOtherAccount(user)) {
