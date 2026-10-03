@@ -81,10 +81,7 @@ export async function init(callback: ReadyCallback): Promise<void> {
     let user = await manager.getUser();
     if (user?.expired === true) {
       user = await renewToken();
-      if (user === null) {
-        await manager.removeUser();
-        notifySessionExpired();
-      }
+      if (user === null) await manager.removeUser();
     }
 
     const authUser = toAuthUser(user);
@@ -114,10 +111,6 @@ export async function signIn(): Promise<void> {
   await manager.signinRedirect({ prompt: "login" });
 }
 
-function notifySessionExpired(): void {
-  showErrorNotification("Your session expired, please sign in again");
-}
-
 async function clearUser(): Promise<void> {
   await manager?.removeUser();
   setUserState(null);
@@ -136,6 +129,13 @@ async function renewToken(): Promise<User | null> {
     .catch((e: unknown) => {
       console.error("Failed to renew OIDC token", e);
       return null;
+    })
+    .then((user) => {
+      // inside the shared promise, so concurrent callers notify only once
+      if (user === null) {
+        showErrorNotification("Your session expired, please sign in again");
+      }
+      return user;
     })
     .finally(() => {
       renewPromise = undefined;
@@ -163,7 +163,6 @@ export async function getIdToken(): Promise<string | null> {
     user = await renewToken();
     if (user === null) {
       await clearUser();
-      notifySessionExpired();
       return null;
     }
     if (isOtherAccount(user)) {

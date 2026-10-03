@@ -142,6 +142,16 @@ describe("oidc", () => {
     });
   });
 
+  it("notifies once when concurrent calls share a failed renewal", async () => {
+    manager.getUser.mockResolvedValue(createUser("uid1", 10));
+    manager.signinSilent.mockRejectedValue(new Error("login required"));
+
+    await Promise.all([Oidc.getIdToken(), Oidc.getIdToken()]);
+
+    expect(manager.signinSilent).toHaveBeenCalledOnce();
+    expect(showErrorNotification).toHaveBeenCalledOnce();
+  });
+
   describe("account changes in other tabs", () => {
     const reloadMock = vi.fn();
 
