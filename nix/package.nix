@@ -54,7 +54,7 @@ let
     inherit version pnpm;
     src = workspaceSrc;
     fetcherVersion = 4;
-    hash = "sha256-bGbH6G3Q3s04RteQsW0txJ33zKRBLSNTi9UV9Eo5/Qo=";
+    hash = "sha256-05tbSoNgbU+nWKSoB9+M47rhnym86eQlPFLA0w0WkyU=";
   };
 
   # the installed workspace with the internal packages built. Its inputs don't

@@ -32,7 +32,6 @@ import { waitForTagsReady } from "./collections/tags";
 import { updateFromServer as updateConfigFromServer } from "./config/remote";
 import * as DB from "./db";
 import { authEvent } from "./events/auth";
-import { googleSignUpEvent } from "./events/google-sign-up";
 import {
   createUserWithEmailAndPassword,
   getAuthenticatedUser,
@@ -45,6 +44,7 @@ import { createEffectOn } from "./hooks/effects";
 import * as Oidc from "./oidc";
 import * as Sentry from "./sentry";
 import { getUserId, isAuthenticated, setUserId } from "./states/core";
+import { showOidcSignUpModal } from "./states/google-sign-up";
 import { hideLoaderBar, showLoaderBar } from "./states/loader-bar";
 import {
   showErrorNotification,
@@ -236,7 +236,7 @@ export async function loadUser(user: AuthUser): Promise<void> {
   const result = await getDataAndInit();
   if (result === "signUpRequired") {
     setUserId(null);
-    googleSignUpEvent.dispatch({ oidcUser: user });
+    showOidcSignUpModal(user);
     return;
   }
   if (result === "failed") {
@@ -269,9 +269,26 @@ export async function onAuthStateChanged(
     void Sentry.clearUser();
   }
 
+  dispatchAuthStateChanged(user, userPromise);
+}
+
+/**
+ * Announces a new auth state: `user` signed in (null: signed out), with
+ * `loadPromise` downloading their user data.
+ */
+export function dispatchAuthStateChanged(
+  user: AuthUser | null,
+  loadPromise: Promise<void>,
+): void {
   authEvent.dispatch({
     type: "authStateChanged",
-    data: { isUserSignedIn: user !== null, loadPromise: userPromise },
+    data: {
+      isUserSignedIn: user !== null,
+      loadPromise,
+      reloadUserData: async () => {
+        if (user !== null) await loadUser(user);
+      },
+    },
   });
 }
 
@@ -417,7 +434,6 @@ async function addPopupProvider(
   }
 
   await linkWithPopup(user, provider);
-  authEvent.dispatch({ type: "authConfigUpdated" });
 }
 
 export async function removeAuthProvider(

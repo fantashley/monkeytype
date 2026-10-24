@@ -11,12 +11,8 @@ import { usePendingConnectionsQuery } from "../../../collections/connections";
 import { restartTestEvent } from "../../../events/test";
 import { createEffectOn } from "../../../hooks/effects";
 import { useRefWithUtils } from "../../../hooks/useRefWithUtils";
-import {
-  prefetchAboutPage,
-  prefetchLeaderboardPage,
-} from "../../../queries/prefetch";
 import { getServerConfigurationQueryOptions } from "../../../queries/server-configuration";
-import { getActivePage, isAuthenticated } from "../../../states/core";
+import { isAuthenticated } from "../../../states/core";
 import {
   getAccountButtonSpinner,
   getAnimatedLevel,
@@ -24,6 +20,7 @@ import {
 } from "../../../states/header";
 import { getLastKnownLoginRequired } from "../../../states/login-required";
 import { showModal } from "../../../states/modals";
+import { getRoutePage } from "../../../states/router";
 import { getSnapshot } from "../../../states/snapshot";
 import { getFocus } from "../../../states/test";
 import { cn } from "../../../utils/cn";
@@ -97,14 +94,13 @@ export function Nav(): JSXElement {
             icon: "fa-keyboard",
             fixedWidth: true,
           }}
-          router-link
-          href="/"
+          to="/"
           class={buttonClass()}
           dataset={{
             "data-nav-item": "test",
           }}
           onClick={() => {
-            if (getActivePage() === "test") restartTestEvent.dispatch();
+            if (getRoutePage() === "test") restartTestEvent.dispatch();
           }}
         />
         <Button
@@ -113,15 +109,11 @@ export function Nav(): JSXElement {
             icon: "fa-crown",
             fixedWidth: true,
           }}
-          router-link
           dataset={{
             "data-nav-item": "leaderboards",
           }}
           class={buttonClass()}
-          href="/leaderboards"
-          onMouseEnter={() => {
-            prefetchLeaderboardPage();
-          }}
+          to="/leaderboards"
         />
         <Button
           variant="text"
@@ -133,11 +125,7 @@ export function Nav(): JSXElement {
           dataset={{
             "data-nav-item": "about",
           }}
-          href="/about"
-          router-link
-          onMouseEnter={() => {
-            prefetchAboutPage();
-          }}
+          to="/about"
         />
         <Button
           variant="text"
@@ -146,11 +134,10 @@ export function Nav(): JSXElement {
             fixedWidth: true,
           }}
           class={buttonClass()}
-          href="/settings"
+          to="/settings"
           dataset={{
             "data-nav-item": "settings",
           }}
-          router-link
         />
       </Show>
       <div class="grow"></div>
@@ -187,7 +174,7 @@ export function Nav(): JSXElement {
               <Show when={showLoginButton()}>
                 <Button
                   variant="text"
-                  href="/login"
+                  to="/login"
                   dataset={{
                     "data-nav-item": "login",
                   }}
@@ -196,7 +183,6 @@ export function Nav(): JSXElement {
                     variant: "regular",
                     fixedWidth: true,
                   }}
-                  router-link
                   class={buttonClass()}
                 />
               </Show>
@@ -239,8 +225,7 @@ export function Nav(): JSXElement {
                     "hover:**:data-[ui-element='userLevel']:bg-(--themable-button-hover-text)",
                     { "opacity-(--nav-focus-opacity)": getFocus() },
                   )}
-                  href="/account"
-                  router-link
+                  to="/account"
                   dataset={{
                     "data-nav-item": "account",
                   }}
