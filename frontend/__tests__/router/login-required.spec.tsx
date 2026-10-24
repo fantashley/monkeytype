@@ -91,6 +91,46 @@ describe("login required", () => {
     });
   });
 
+  describe("when the server configuration changed since the last visit", () => {
+    it("sends signed out users to the login page once it's loaded", async () => {
+      const serverConfiguration = deferred<unknown>();
+      const app = renderApp({
+        url: "/",
+        auth: "signedOut",
+        loginRequired: false,
+        queryResponses: [
+          [serverConfigurationKey, async () => serverConfiguration.promise],
+        ],
+      });
+      await app.settle();
+      expect(app.shownPage()).toBe("test");
+
+      void app.queryClient.prefetchQuery(getServerConfigurationQueryOptions());
+      serverConfiguration.resolve(configuration(true));
+      await app.settle();
+
+      expect(app.url()).toBe("/login");
+      expect(app.shownPage()).toBe("login");
+    });
+
+    it("keeps signed in users on their page", async () => {
+      const app = renderApp({
+        url: "/settings",
+        auth: "signedIn",
+        loginRequired: false,
+        queryResponses: [
+          [serverConfigurationKey, async () => configuration(true)],
+        ],
+      });
+      await app.settle();
+
+      await app.queryClient.fetchQuery(getServerConfigurationQueryOptions());
+      await app.settle();
+
+      expect(app.shownPage()).toBe("settings");
+    });
+  });
+
   describe("when this browser never loaded the server configuration", () => {
     it.each([
       { loginRequired: false, page: "test" },

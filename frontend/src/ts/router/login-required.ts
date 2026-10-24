@@ -1,11 +1,15 @@
 // Servers can require users to sign in (users.loginRequired): signed out users
 // are kept on the login page
 
-import type { QueryClient } from "@tanstack/solid-query";
+import type { Configuration } from "@monkeytype/schemas/configuration";
+import { hashKey, type QueryClient } from "@tanstack/solid-query";
 import { tryCatch } from "@monkeytype/util/trycatch";
 
 import { getServerConfigurationQueryOptions } from "../queries/server-configuration";
-import { getLastKnownLoginRequired } from "../states/login-required";
+import {
+  getLastKnownLoginRequired,
+  setLastKnownLoginRequired,
+} from "../states/login-required";
 import type { RouterAuth } from "./create-router-auth";
 
 /**
@@ -55,4 +59,31 @@ export async function mustSignIn(context: {
   return (
     !context.auth.isSignedIn() && (await isLoginRequired(context.queryClient))
   );
+}
+
+/**
+ * Remembers the setting of every loaded configuration. Calls `onChange` when
+ * it differs from the last known one the guards used (eg. login became
+ * required since the last visit), so they can run again.
+ */
+export function watchLoginRequired(
+  queryClient: QueryClient,
+  onChange: () => void,
+): () => void {
+  const queryHash = hashKey(getServerConfigurationQueryOptions().queryKey);
+  return queryClient.getQueryCache().subscribe((event) => {
+    if (
+      event.type !== "updated" ||
+      event.action.type !== "success" ||
+      event.query.queryHash !== queryHash
+    ) {
+      return;
+    }
+    const data = event.query.state.data as Configuration;
+    const lastKnown = getLastKnownLoginRequired();
+    if (data.users.loginRequired === lastKnown) return;
+    setLastKnownLoginRequired(data.users.loginRequired);
+    // without a last known setting the guards waited for this configuration
+    if (lastKnown !== null) onChange();
+  });
 }

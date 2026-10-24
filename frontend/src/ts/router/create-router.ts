@@ -19,7 +19,7 @@ import {
 import { isFunboxActive } from "../test/funbox/list";
 import { leaveTestPage } from "../test/test-logic";
 import { finishLoadingBar } from "./loading-bar";
-import { isLoginRequiredNow } from "./login-required";
+import { isLoginRequiredNow, watchLoginRequired } from "./login-required";
 import { type RouterContext, routeTree } from "./routes";
 import { parseSearch, stringifySearch } from "./search-params";
 import { createNonRouterPage } from "../components/core/Page";
@@ -131,6 +131,11 @@ export function createAppRouter(
   // re-run guards and loaders when the user signs in or out. The initial load
   // waits for the first auth state itself (the userData route's beforeLoad)
   context.auth.onChange(() => void router.invalidate());
+  // and for signed out users when the server starts or stops requiring them
+  // to sign in
+  watchLoginRequired(context.queryClient, () => {
+    if (!context.auth.isSignedIn()) void router.invalidate();
+  });
 
   // the loads are done: the bar fills up to "Done", then the loading page
   // hides (see PageSwitcher)

@@ -1,7 +1,6 @@
 import { queryOptions } from "@tanstack/solid-query";
 import { baseKey } from "./utils/keys";
 import Ape from "../ape";
-import { setLastKnownLoginRequired } from "../states/login-required";
 
 const queryKeys = {
   root: () => baseKey("serverConfiguration"),
@@ -22,8 +21,6 @@ export const getServerConfigurationQueryOptions = () =>
           `Could not fetch configuration: ${response.body.message}`,
         );
       }
-      // used until the configuration is loaded on the next visit
-      setLastKnownLoginRequired(response.body.data.users.loginRequired);
       return response.body.data;
     },
     staleTime,
