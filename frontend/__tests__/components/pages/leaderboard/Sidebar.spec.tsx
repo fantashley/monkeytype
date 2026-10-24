@@ -4,10 +4,12 @@ import { describe, it, expect, vi } from "vitest";
 
 import {
   getTypeButtons,
-  isValidAllTimeSelection,
   Sidebar,
 } from "../../../../src/ts/components/pages/leaderboard/Sidebar";
-import { Selection } from "../../../../src/ts/states/leaderboard-selection";
+import {
+  isValidAllTimeSelection,
+  Selection,
+} from "../../../../src/ts/states/leaderboard-selection";
 
 function selection(patch: Partial<Selection> = {}): Selection {
   return {

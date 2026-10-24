@@ -4,20 +4,23 @@ import {
   getAdditionalUserInfo,
   sendEmailVerification,
   updateProfile,
-  UserCredential,
 } from "firebase/auth";
 
 import type { AuthUser } from "../../types/auth";
 
 import Ape from "../../ape";
-import { loadUser, signOut } from "../../auth";
+import { dispatchAuthStateChanged, loadUser, signOut } from "../../auth";
 import { signOut as authSignOut } from "../../auth-provider";
-import { authEvent } from "../../events/auth";
-import { googleSignUpEvent } from "../../events/google-sign-up";
 import { resetIgnoreAuthCallback, setUserState } from "../../firebase";
 import { setUserId } from "../../states/core";
+import {
+  getGoogleSignUpUser,
+  getOidcSignUpUser,
+  setGoogleSignUpUser,
+  setOidcSignUpUser,
+} from "../../states/google-sign-up";
 import { hideLoaderBar, showLoaderBar } from "../../states/loader-bar";
-import { hideModal, ModalId, showModal } from "../../states/modals";
+import { hideModal, ModalId } from "../../states/modals";
 import {
   showErrorNotification,
   showNoticeNotification,
@@ -31,9 +34,6 @@ import { SubmitButton } from "../ui/form/SubmitButton";
 import { allFieldsMandatory, fromSchema } from "../ui/form/utils";
 
 const modalId: ModalId = "GoogleSignup";
-let signedInUser: UserCredential | undefined = undefined;
-// user signed in at an OIDC provider who does not have an account yet
-let oidcUser: AuthUser | undefined = undefined;
 
 export function GoogleSignupModal() {
   const form = createForm(() => ({
@@ -99,13 +99,15 @@ export function GoogleSignupModal() {
 
 async function afterHide(): Promise<void> {
   resetIgnoreAuthCallback();
+  const oidcUser = getOidcSignUpUser();
   if (oidcUser !== undefined) {
     showNoticeNotification("Sign up process cancelled", {
       durationMs: 5000,
     });
-    oidcUser = undefined;
+    setOidcSignUpUser(undefined);
     await authSignOut();
   }
+  const signedInUser = getGoogleSignUpUser();
   if (signedInUser !== undefined) {
     showNoticeNotification("Sign up process cancelled", {
       durationMs: 5000,
@@ -117,7 +119,7 @@ async function afterHide(): Promise<void> {
       });
     }
     signOut();
-    signedInUser = undefined;
+    setGoogleSignUpUser(undefined);
   }
 }
 async function apply(options: {
@@ -125,10 +127,12 @@ async function apply(options: {
   captcha: string;
 }): Promise<void> {
   const { username: name, captcha } = options;
+  const oidcUser = getOidcSignUpUser();
   if (oidcUser !== undefined) {
     await applyOidc(oidcUser, name, captcha);
     return;
   }
+  const signedInUser = getGoogleSignUpUser();
   if (!signedInUser) {
     showErrorNotification(
       "Missing user credential. Please close the popup and try again.",
@@ -153,23 +157,19 @@ async function apply(options: {
     await sendEmailVerification(signedInUser.user);
     showSuccessNotification("Account created");
     await loadUser(signedInUser.user);
-
-    authEvent.dispatch({
-      type: "authStateChanged",
-      data: { isUserSignedIn: true, loadPromise: Promise.resolve() },
-    });
-    signedInUser = undefined;
+    dispatchAuthStateChanged(signedInUser.user, Promise.resolve());
+    setGoogleSignUpUser(undefined);
   } catch (e) {
     console.log(e);
     showErrorNotification("Failed to sign in with Google", { error: e });
-    if (signedInUser && getAdditionalUserInfo(signedInUser)?.isNewUser) {
+    if (getAdditionalUserInfo(signedInUser)?.isNewUser) {
       await Ape.users.delete();
       await signedInUser?.user.delete().catch(() => {
         //user might be deleted already by the server
       });
     }
     signOut();
-    signedInUser = undefined;
+    setGoogleSignUpUser(undefined);
   } finally {
     hideLoaderBar();
     hideModal(modalId);
@@ -193,15 +193,11 @@ async function applyOidc(
       throw new Error(`Failed to create user: ${response.body.message}`);
     }
 
-    oidcUser = undefined;
+    setOidcSignUpUser(undefined);
     setUserId(user.uid);
     showSuccessNotification("Account created");
     await loadUser(user);
-
-    authEvent.dispatch({
-      type: "authStateChanged",
-      data: { isUserSignedIn: true, loadPromise: Promise.resolve() },
-    });
+    dispatchAuthStateChanged(user, Promise.resolve());
   } catch (e) {
     console.log(e);
     showErrorNotification("Failed to create account", { error: e });
@@ -210,13 +206,3 @@ async function applyOidc(
     hideModal(modalId);
   }
 }
-
-googleSignUpEvent.subscribe((data) => {
-  if ("oidcUser" in data) {
-    oidcUser = data.oidcUser;
-    showModal(modalId);
-  } else if (data.signedInUser !== undefined && data.isNewUser) {
-    signedInUser = data.signedInUser;
-    showModal(modalId);
-  }
-});

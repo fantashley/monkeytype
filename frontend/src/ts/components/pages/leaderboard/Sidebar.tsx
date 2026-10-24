@@ -4,7 +4,10 @@ import { Mode } from "@monkeytype/schemas/shared";
 import { Accessor, createEffect, For, JSXElement, Show } from "solid-js";
 
 import { isAuthenticated } from "../../../states/core";
-import { Selection } from "../../../states/leaderboard-selection";
+import {
+  isValidAllTimeSelection,
+  Selection,
+} from "../../../states/leaderboard-selection";
 import { FaSolidIcon } from "../../../types/font-awesome";
 import { Button } from "../../common/Button";
 
@@ -118,21 +121,6 @@ export function Sidebar(props: {
         />
       </Show>
     </>
-  );
-}
-
-/**
- * true if the selection is an all-time leaderboard of the configured time modes
- */
-export function isValidAllTimeSelection(
-  selection: Selection,
-  allTimeModes: string[],
-): boolean {
-  return (
-    selection.type === "allTime" &&
-    selection.mode === "time" &&
-    allTimeModes.includes(selection.mode2) &&
-    selection.language === "english"
   );
 }
 
